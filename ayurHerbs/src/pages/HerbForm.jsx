@@ -273,4 +273,3 @@ function HerbForm({ colors = {} }) {
 }
 
 export default HerbForm;
-    

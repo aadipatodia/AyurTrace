@@ -1,16 +1,18 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FaHome, FaSeedling, FaLeaf, FaSun, FaMoon } from "react-icons/fa";
+import { FaHome, FaSeedling, FaLeaf, FaSun, FaMoon, FaUser } from "react-icons/fa";
 
 // Lazy load pages
 const Home = lazy(() => import("./pages/Home"));
 const HerbForm = lazy(() => import("./pages/HerbForm"));
 const HealthyLifestyle = lazy(() => import("./pages/HealthyLifestyle"));
+const AuthPage = lazy(() => import("./pages/AuthPage")); // NEW
 
 const PAGES = {
   home: "home",
   herbForm: "herb-form",
   healthyLifestyle: "healthy-lifestyle",
+  auth: "auth", // NEW
 };
 
 function App() {
@@ -47,6 +49,7 @@ function App() {
     goldTan: "#a87f4c",
     darkText: "#222",
     lightText: "#f0f0f0",
+    darkBackground: "#2c3e50",
   };
 
   const renderPage = () => {
@@ -55,6 +58,8 @@ function App() {
         return <HerbForm colors={colors} />;
       case PAGES.healthyLifestyle:
         return <HealthyLifestyle colors={colors} />;
+      case PAGES.auth: // NEW
+        return <AuthPage colors={colors} />;
       case PAGES.home:
       default:
         return <Home colors={colors} navigateTo={navigateTo} PAGES={PAGES} />;
@@ -65,7 +70,7 @@ function App() {
     <div
       className="min-h-screen transition-colors duration-500 flex flex-col"
       style={{
-        backgroundColor: darkMode ? colors.darkCharcoal : colors.lightGrey,
+        backgroundColor: darkMode ? colors.darkBackground : colors.lightGrey,
         color: darkMode ? colors.lightText : colors.darkText,
       }}
     >
@@ -96,6 +101,13 @@ function App() {
             label="Lifestyle"
             onClick={() => navigateTo(PAGES.healthyLifestyle)}
             active={page === PAGES.healthyLifestyle}
+            colors={colors}
+          />
+          <NavLink // NEW
+            icon={<FaUser />}
+            label="Account"
+            onClick={() => navigateTo(PAGES.auth)}
+            active={page === PAGES.auth}
             colors={colors}
           />
         </div>

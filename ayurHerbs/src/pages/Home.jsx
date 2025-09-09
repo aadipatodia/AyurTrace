@@ -27,40 +27,34 @@ export default function Home({ colors = {}, navigateTo, PAGES }) {
       </motion.div>
 
       <motion.div
-        className="w-full relative rounded-2xl overflow-hidden shadow-2xl"
+        className="w-full relative rounded-2xl overflow-hidden shadow-2xl p-8 text-center"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.8 }}
+        style={{ backgroundColor: colors.lightGrey }}
       >
-        <img
-          src="https://images.unsplash.com/photo-1542841961-4560b37f4625"
-          alt="Lush green herbs and plants"
-          className="w-full h-96 object-cover"
-        />
-        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-8">
-          <h2 className="text-4xl font-bold text-white text-shadow-md mb-6">
-            Explore and Contribute
-          </h2>
-          <div className="flex space-x-6">
-            <motion.button
-              onClick={() => navigateTo(PAGES.herbForm)}
-              className="px-8 py-4 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105"
-              style={{ backgroundColor: primaryGreen }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Add a Herb Entry 🌿
-            </motion.button>
-            <motion.button
-              onClick={() => navigateTo(PAGES.healthyLifestyle)}
-              className="px-8 py-4 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105"
-              style={{ backgroundColor: goldTan }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Get Lifestyle Tips 🌱
-            </motion.button>
-          </div>
+        <h2 className="text-4xl font-bold mb-6" style={{ color: primaryGreen }}>
+          Explore and Contribute
+        </h2>
+        <div className="flex space-x-6 justify-center">
+          <motion.button
+            onClick={() => navigateTo(PAGES.herbForm)}
+            className="px-8 py-4 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105"
+            style={{ backgroundColor: primaryGreen }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Add a Herb Entry 🌿
+          </motion.button>
+          <motion.button
+            onClick={() => navigateTo(PAGES.healthyLifestyle)}
+            className="px-8 py-4 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105"
+            style={{ backgroundColor: goldTan }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Get Lifestyle Tips 🌱
+          </motion.button>
         </div>
       </motion.div>
     </div>
