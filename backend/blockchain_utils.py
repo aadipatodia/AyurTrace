@@ -4,18 +4,16 @@ from solcx import compile_standard, install_solc
 import os
 
 # --- Step 1: Connect to Ganache ---
-ganache_url = "http://127.0.0.1:7545"  # This is the default RPC URL for Ganache
+ganache_url = "http://127.0.0.1:7545"
 web3 = Web3(Web3.HTTPProvider(ganache_url))
 assert web3.is_connected()
 print("Connected to Ganache!")
 
-# --- Step 2: Install Solidity compiler and compile the smart contract ---
-# Install the Solidity compiler if it's not already installed
-# This only needs to be run once.
+# --- Step 2: Install and Compile the Smart Contract ---
 try:
-    install_solc("0.8.0")
+    install_solc("0.8.20")
 except Exception:
-    print("Solidity compiler version 0.8.0 is already installed.")
+    print("Solidity compiler version 0.8.20 is already installed.")
 
 def compile_contract(contract_path):
     """
@@ -33,53 +31,81 @@ def compile_contract(contract_path):
             }
         },
         "settings": {
+             "optimizer": {
+                "enabled": True,
+                "runs": 200
+            },
             "outputSelection": {
                 "*": {
-                    "*": ["abi", "evm.bytecode", "evm.deployedBytecode"]
+                    "*": ["abi", "evm.bytecode"]
                 }
             }
         }
     },
-    solc_version="0.8.0")
+    solc_version="0.8.20",
+    # Allow import paths for OpenZeppelin
+    allow_paths="../blockchain/node_modules")
+    
     return compiled_sol
 
-# --- Step 3: Deploy the contract and get the address ---
+# --- Step 3: Deploy the contract ---
 def deploy_contract(compiled_sol):
     """
     Deploys the compiled contract to the Ganache network.
     """
-    # Get the contract's bytecode and ABI from the compiled output
     bytecode = compiled_sol['contracts']['AyurTrace.sol']['AyurTrace']['evm']['bytecode']['object']
     abi = compiled_sol['contracts']['AyurTrace.sol']['AyurTrace']['abi']
     
-    # Get the default account to deploy from
-    account = web3.eth.accounts[0]
+    account = web3.eth.accounts[0] # This will be the admin
     
-    # Create the contract instance
     AyurTraceContract = web3.eth.contract(abi=abi, bytecode=bytecode)
     
-    # Build and send the deployment transaction
     tx_hash = AyurTraceContract.constructor().transact({
-        'from': account
+        'from': account,
+        'gas': 2000000 
     })
     
-    # Wait for the transaction to be mined and get the contract address
     tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
     contract_address = tx_receipt.contractAddress
     
     print(f"Contract deployed at: {contract_address}")
     return contract_address, abi
 
-# --- Main execution block to compile and deploy ---
+# --- NEW Step 4: Grant Roles ---
+def setup_roles(contract_address, contract_abi):
+    """
+    Sets up the initial roles for the application after deployment.
+    """
+    contract = web3.eth.contract(address=contract_address, abi=contract_abi)
+    admin_account = web3.eth.accounts[0]
+    processor_account = web3.eth.accounts[1]
+
+    print(f"Admin Account: {admin_account}")
+    print(f"Processor Account: {processor_account}")
+
+    # Grant the PROCESSOR_ROLE to the second account
+    try:
+        print("Granting PROCESSOR_ROLE...")
+        tx_hash = contract.functions.addProcessor(processor_account).transact({'from': admin_account})
+        web3.eth.wait_for_transaction_receipt(tx_hash)
+        print(f"Successfully granted PROCESSOR_ROLE to {processor_account}")
+    except Exception as e:
+        print(f"An error occurred while granting roles: {e}")
+
+# --- Main execution block ---
 if __name__ == "__main__":
-    # Correct file path
+    # Correct file path, assuming this script is in the `backend` directory
     contract_file_path = os.path.join("..", "blockchain", "contracts", "AyurTrace.sol")
     
+    # Make sure you have run `npm install` inside the `blockchain` directory first
     compiled_contract = compile_contract(contract_file_path)
+    
     contract_address, contract_abi = deploy_contract(compiled_contract)
 
-    # Save the address and ABI to a file for later use
-    # Note: The file is saved in the 'backend' folder
+    # NEW: Call the function to set up roles
+    setup_roles(contract_address, contract_abi)
+
+    # Save details for the backend to use
     with open("contract_details.json", "w") as f:
         json.dump({"address": contract_address, "abi": contract_abi}, f)
     print("Contract details saved to contract_details.json")

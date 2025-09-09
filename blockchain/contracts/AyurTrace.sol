@@ -1,48 +1,88 @@
-    // SPDX-License-Identifier: MIT
-    pragma solidity ^0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-    contract AyurTrace {
-        // Define a custom data type for an herb entry
-        struct Herb {
-            string name;
-            string verifiedSpecies;
-            uint256 confidenceScore;
-            int latitude;
-            int longitude;
-            uint256 timestamp;
-        }
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-        // A mapping to store herb entries with a unique ID
-        // The unique ID will be the total number of entries, which we'll manage with a counter
-        mapping(uint256 => Herb) public herbEntries;
+contract AyurTrace is AccessControl {
+    bytes32 public constant PROCESSOR_ROLE = keccak256("PROCESSOR_ROLE");
 
-        uint256 public herbCount;
-
-        // An event to signal when a new herb entry has been added
-        event HerbAdded(uint256 id, string name, string verifiedSpecies);
-
-        // A function to add a new herb entry to the blockchain
-        function addHerb(
-            string memory _name,
-            string memory _verifiedSpecies,
-            uint256 _confidenceScore,
-            int _latitude,
-            int _longitude
-        ) public {
-            // Store the new herb entry
-            herbEntries[herbCount] = Herb({
-                name: _name,
-                verifiedSpecies: _verifiedSpecies,
-                confidenceScore: _confidenceScore,
-                latitude: _latitude,
-                longitude: _longitude,
-                timestamp: block.timestamp
-            });
-
-            // Increment the counter for the next entry
-            herbCount++;
-
-            // Emit an event to log the action
-            emit HerbAdded(herbCount, _name, _verifiedSpecies);
-        }
+    struct Herb {
+        string name;
+        string verifiedSpecies;
+        uint256 confidenceScore;
+        int latitude;
+        int longitude;
+        uint256 timestamp;
+        address farmer; // Original farmer's address
     }
+
+    // Struct for subsequent processing steps
+    struct ProcessingStep {
+        string action; // e.g., "Dried", "Packaged", "Quality Tested"
+        string batchNumber;
+        uint256 timestamp;
+        address processor; // Address of the processor
+    }
+
+    // Mapping from herb ID to the herb's initial data
+    mapping(uint256 => Herb) public herbEntries;
+
+    // Mapping from herb ID to its processing history
+    mapping(uint256 => ProcessingStep[]) public processingHistory;
+
+    uint256 public herbCount;
+
+    event HerbAdded(uint256 indexed id, string name, address indexed farmer);
+    event ProcessingStepAdded(uint256 indexed herbId, string action, string batchNumber, address indexed processor);
+
+    constructor() {
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    }
+
+    
+    function addHerb(
+        string memory _name,
+        string memory _verifiedSpecies,
+        uint256 _confidenceScore,
+        int _latitude,
+        int _longitude
+    ) public {
+        herbEntries[herbCount] = Herb({
+            name: _name,
+            verifiedSpecies: _verifiedSpecies,
+            confidenceScore: _confidenceScore,
+            latitude: _latitude,
+            longitude: _longitude,
+            timestamp: block.timestamp,
+            farmer: msg.sender
+        });
+
+        emit HerbAdded(herbCount, _name, msg.sender);
+        herbCount++;
+    }
+    
+    function addProcessingStep(
+        uint256 _herbId,
+        string memory _action,
+        string memory _batchNumber
+    ) public onlyRole(PROCESSOR_ROLE) {
+        require(_herbId < herbCount, "AyurTrace: Herb ID does not exist.");
+
+        processingHistory[_herbId].push(ProcessingStep({
+            action: _action,
+            batchNumber: _batchNumber,
+            timestamp: block.timestamp,
+            processor: msg.sender
+        }));
+
+        emit ProcessingStepAdded(_herbId, _action, _batchNumber, msg.sender);
+    }
+
+    function addProcessor(address _processorAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        grantRole(PROCESSOR_ROLE, _processorAddress);
+    }
+
+    function getProcessingHistory(uint256 _herbId) public view returns (ProcessingStep[] memory) {
+        return processingHistory[_herbId];
+    }
+}

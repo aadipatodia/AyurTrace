@@ -89,7 +89,7 @@ async def get_herb_suitability(herb_name: str = Query(..., description="The comm
     except Exception as e:
         return {"status": "error", "message": f"An error occurred: {e}"}
 
-# --- Endpoint 2: Herb Traceability Submission ---
+# --- Endpoint 2: Herb Traceability Submission (Farmer) ---
 @app.post("/submit_herb/")
 async def submit_herb(
     herb_name: str = Form(...),
@@ -111,11 +111,8 @@ async def submit_herb(
 
         print(f"AI Prediction: {ai_verified_species} with {confidence_score:.2f}% confidence.")
         
-        quality_verdict = "Good Quality"
-        print(f"Quality Check (Simulated): {quality_verdict}")
-        
         if AyurTraceContract:
-            account = web3.eth.accounts[0]
+            account = web3.eth.accounts[0] # Farmer's account
             tx_hash = AyurTraceContract.functions.addHerb(
                 herb_name,
                 ai_verified_species,
@@ -131,8 +128,7 @@ async def submit_herb(
                 "message": "Herb data and AI verification committed to blockchain.",
                 "ai_result": {
                     "verified_species": ai_verified_species,
-                    "confidence": f"{confidence_score:.2f}%",
-                    "quality_check": quality_verdict
+                    "confidence": f"{confidence_score:.2f}%"
                 }
             }
         else:
@@ -141,7 +137,48 @@ async def submit_herb(
     except Exception as e:
         return {"status": "error", "message": f"An error occurred: {e}"}
 
-# --- Endpoint 3: Traceability Dashboard ---
+# --- Endpoint 3: Processor Updates ---
+@app.post("/process_herb/{herb_id}")
+async def process_herb(
+    herb_id: int,
+    action: str = Form(...),
+    batch_number: str = Form(...)
+):
+    """
+    Allows a processor to add a processing step to an existing herb entry.
+    """
+    if not AyurTraceContract:
+        return {"status": "error", "message": "Smart contract not deployed."}
+
+    try:
+        processor_account = web3.eth.accounts[1]
+
+        PROCESSOR_ROLE = Web3.keccak(text="PROCESSOR_ROLE")
+        has_role = AyurTraceContract.functions.hasRole(PROCESSOR_ROLE, processor_account).call()
+        if not has_role:
+            admin_account = web3.eth.accounts[0]
+            tx_hash_grant = AyurTraceContract.functions.addProcessor(processor_account).transact({'from': admin_account})
+            web3.eth.wait_for_transaction_receipt(tx_hash_grant)
+            print(f"Granted PROCESSOR_ROLE to {processor_account}")
+
+        tx_hash = AyurTraceContract.functions.addProcessingStep(
+            herb_id,
+            action,
+            batch_number
+        ).transact({'from': processor_account})
+
+        receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        return {
+            "status": "success",
+            "message": "Processing step added to blockchain.",
+            "herb_id": herb_id,
+            "transaction_hash": receipt.transactionHash.hex()
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"An error occurred: {e}"}
+
+# --- Endpoint 4: General Dashboard ---
 @app.get("/dashboard/")
 async def get_dashboard_data():
     if not AyurTraceContract:
@@ -153,18 +190,65 @@ async def get_dashboard_data():
         for i in range(herb_count):
             record = AyurTraceContract.functions.herbEntries(i).call()
             records.append({
+                "id": i,
                 "name": record[0],
                 "verified_species": record[1],
                 "confidence_score": record[2],
                 "latitude": record[3] / 1e6,
                 "longitude": record[4] / 1e6,
-                "timestamp": record[5]
+                "timestamp": record[5],
+                "farmer": record[6]
             })
         return {"status": "success", "data": records}
     except Exception as e:
         return {"status": "error", "message": f"An error occurred: {e}"}
 
-# --- Endpoint 4: Contextual Advice for Collectors ---
+# --- Endpoint 5: Consumer Traceability ---
+@app.get("/trace_herb/{herb_id}")
+async def trace_herb(herb_id: int):
+    """
+    Fetches the full history of an herb, including origin and processing steps.
+    """
+    if not AyurTraceContract:
+        return {"status": "error", "message": "Smart contract not deployed."}
+
+    try:
+        herb_data = AyurTraceContract.functions.herbEntries(herb_id).call()
+        if not herb_data[0]:
+            return {"status": "error", "message": "Herb ID not found."}
+
+        origin_details = {
+            "name": herb_data[0],
+            "verifiedSpecies": herb_data[1],
+            "confidenceScore": herb_data[2],
+            "latitude": herb_data[3] / 1e6,
+            "longitude": herb_data[4] / 1e6,
+            "timestamp": herb_data[5],
+            "farmer": herb_data[6]
+        }
+
+        history_data = AyurTraceContract.functions.getProcessingHistory(herb_id).call()
+        processing_history = []
+        for step in history_data:
+            processing_history.append({
+                "action": step[0],
+                "batchNumber": step[1],
+                "timestamp": step[2],
+                "processor": step[3]
+            })
+
+        return {
+            "status": "success",
+            "data": {
+                "origin": origin_details,
+                "processingHistory": processing_history
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"An error occurred while tracing herb: {e}"}
+
+
+# --- Endpoint 6: Contextual Advice for Collectors (LLM) ---
 @app.post("/llm_query/")
 async def llm_query(
     question: str = Query(...),
