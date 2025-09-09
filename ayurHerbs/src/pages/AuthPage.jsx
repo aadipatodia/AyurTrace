@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { FaUserPlus, FaSignInAlt, FaEnvelope, FaLock, FaSpinner } from "react-icons/fa";
+import { FaUserPlus, FaSignInAlt, FaEnvelope, FaLock, FaSpinner, FaChevronDown } from "react-icons/fa";
 
-export default function AuthPage({ colors = {} }) {
+// The navigateTo prop is no longer needed here since App.jsx will handle navigation after successful login
+export default function AuthPage({ colors = {}, handleLogin }) {
   const primaryGreen = colors.primaryGreen || "#4a7c59";
   const lightGrey = colors.lightGrey || "#f0f4f7";
   const goldTan = colors.goldTan || "#a87f4c";
@@ -13,6 +14,11 @@ export default function AuthPage({ colors = {} }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [selectedSection, setSelectedSection] = useState("Herb Form");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Re-added "Herb Form" to the sections array
+  const sections = ["Herb Form", "Customer", "Processor"];
 
   const title = isLogin ? "Welcome Back" : "Join Us";
   const actionButtonText = isLogin ? "Log In" : "Sign Up";
@@ -35,13 +41,17 @@ export default function AuthPage({ colors = {} }) {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1500));
       if (isLogin) {
-        setSuccess("Logged in successfully! Redirecting...");
+        setSuccess(`Logged in to ${selectedSection} successfully! Redirecting...`);
       } else {
         setSuccess("Account created successfully! Please log in.");
       }
-      setEmail("");
-      setPassword("");
-    } catch (err) {
+
+      // Call the handleLogin function from the parent App component
+      if (handleLogin) {
+        handleLogin(selectedSection);
+      }
+
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);
@@ -67,6 +77,34 @@ export default function AuthPage({ colors = {} }) {
           {isLogin ? <FaSignInAlt className="inline-block mr-2" /> : <FaUserPlus className="inline-block mr-2" />}
           {title}
         </motion.h2>
+
+        {/* Section Selector */}
+        <div className="relative mb-6">
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="w-full py-3 px-4 border rounded-md flex justify-between items-center"
+            style={{ borderColor: lightGrey }}
+          >
+            <span>{selectedSection}</span>
+            <FaChevronDown />
+          </button>
+          {dropdownOpen && (
+            <div className="absolute top-full left-0 right-0 bg-white border rounded-md shadow-lg z-10">
+              {sections.map((section) => (
+                <button
+                  key={section}
+                  onClick={() => {
+                    setSelectedSection(section);
+                    setDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  {section}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -101,9 +139,7 @@ export default function AuthPage({ colors = {} }) {
           <motion.button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-200 ${
-              loading ? "bg-gray-400 cursor-not-allowed" : "hover:scale-105"
-            }`}
+            className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-200 ${loading ? "bg-gray-400 cursor-not-allowed" : "hover:scale-105"}`}
             style={{ backgroundColor: goldTan }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
