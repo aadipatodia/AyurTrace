@@ -2,14 +2,29 @@ import json
 from web3 import Web3
 from solcx import compile_standard, install_solc
 import os
+import sys
+
+# --- Step 0: Pre-flight Check ---
+# Ensure the OpenZeppelin contracts are installed. This is the most common reason for the error.
+openzeppelin_path = os.path.join(os.path.dirname(__file__), "..", "blockchain", "node_modules", "@openzeppelin")
+if not os.path.isdir(openzeppelin_path):
+    print("Error: The OpenZeppelin contracts directory was not found.")
+    print("This means the required libraries are not installed.")
+    print("Please navigate to the 'blockchain' directory in your terminal and run the following command:")
+    print("\n    npm install @openzeppelin/contracts\n")
+    print("Then, run this Python script again from the 'backend' directory.")
+    print("The required path is:", openzeppelin_path)
+    sys.exit(1)
 
 # --- Step 1: Connect to Ganache ---
+# We assume Ganache is running on the default port.
 ganache_url = "http://127.0.0.1:7545"
 web3 = Web3(Web3.HTTPProvider(ganache_url))
 assert web3.is_connected()
 print("Connected to Ganache!")
 
 # --- Step 2: Install and Compile the Smart Contract ---
+# Install the Solidity compiler version 0.8.20 if it's not already present.
 try:
     install_solc("0.8.20")
 except Exception:
@@ -31,10 +46,17 @@ def compile_contract(contract_path):
             }
         },
         "settings": {
-             "optimizer": {
+            "optimizer": {
                 "enabled": True,
                 "runs": 200
             },
+            # Explicitly set the EVM version for better compatibility with Ganache.
+            "evmVersion": "london",
+            # This tells the compiler how to find the OpenZeppelin files.
+            # The path is relative to where the script is run (the `backend` directory).
+            "remappings": [
+                "@openzeppelin=../blockchain/node_modules/@openzeppelin"
+            ],
             "outputSelection": {
                 "*": {
                     "*": ["abi", "evm.bytecode"]
@@ -43,8 +65,9 @@ def compile_contract(contract_path):
         }
     },
     solc_version="0.8.20",
-    # Allow import paths for OpenZeppelin
-    allow_paths="../blockchain/node_modules")
+    # Allow the compiler to access the whole project directory structure.
+    allow_paths=os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    )
     
     return compiled_sol
 
@@ -56,10 +79,12 @@ def deploy_contract(compiled_sol):
     bytecode = compiled_sol['contracts']['AyurTrace.sol']['AyurTrace']['evm']['bytecode']['object']
     abi = compiled_sol['contracts']['AyurTrace.sol']['AyurTrace']['abi']
     
-    account = web3.eth.accounts[0] # This will be the admin
+    # The first account in Ganache will be the contract deployer and admin.
+    account = web3.eth.accounts[0]
     
     AyurTraceContract = web3.eth.contract(abi=abi, bytecode=bytecode)
     
+    # Send the transaction to deploy the contract
     tx_hash = AyurTraceContract.constructor().transact({
         'from': account,
         'gas': 2000000 
@@ -71,7 +96,7 @@ def deploy_contract(compiled_sol):
     print(f"Contract deployed at: {contract_address}")
     return contract_address, abi
 
-# --- NEW Step 4: Grant Roles ---
+# --- Step 4: Grant Roles ---
 def setup_roles(contract_address, contract_abi):
     """
     Sets up the initial roles for the application after deployment.
@@ -95,14 +120,13 @@ def setup_roles(contract_address, contract_abi):
 # --- Main execution block ---
 if __name__ == "__main__":
     # Correct file path, assuming this script is in the `backend` directory
-    contract_file_path = os.path.join("..", "blockchain", "contracts", "AyurTrace.sol")
+    contract_file_path = os.path.join(os.path.dirname(__file__), "..", "blockchain", "contracts", "AyurTrace.sol")
     
-    # Make sure you have run `npm install` inside the `blockchain` directory first
     compiled_contract = compile_contract(contract_file_path)
     
     contract_address, contract_abi = deploy_contract(compiled_contract)
 
-    # NEW: Call the function to set up roles
+    # Call the function to set up roles
     setup_roles(contract_address, contract_abi)
 
     # Save details for the backend to use

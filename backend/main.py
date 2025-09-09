@@ -14,7 +14,7 @@ import io
 # --- Load the AI model and define class names ---
 try:
     model = tf.keras.models.load_model('herb_classifier.h5')
-    print("AI model 'herb_classifier.h5' loaded successfully! ✅")
+    print("AI model 'herb_classifier.h5' loaded successfully! ")
     
     class_names = [
         'Aloevera', 'Amla', 'Amruta_Balli', 'Arali', 'Ashoka', 'Ashwagandha', 'Avacado', 'Bamboo', 'Basale', 'Betel', 
@@ -256,6 +256,7 @@ async def llm_query(
     latitude: float = Query(None),
     longitude: float = Query(None)
 ):
+    # ... (previous code from the llm_query endpoint) ...
     try:
         prompt = f"""
         Role: You are a seasoned Ayurvedic herbalist and a local farmer from the region of India specified by the given latitude and longitude. Your knowledge is based on generations of traditional wisdom and is practical for the local environment.

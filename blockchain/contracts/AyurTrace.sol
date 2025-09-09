@@ -36,7 +36,8 @@ contract AyurTrace is AccessControl {
     event ProcessingStepAdded(uint256 indexed herbId, string action, string batchNumber, address indexed processor);
 
     constructor() {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        // Use _grantRole instead of the deprecated _setupRole
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     
