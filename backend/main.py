@@ -47,7 +47,7 @@ try:
     contract_address = contract_details["address"]
     contract_abi = contract_details["abi"]
     AyurTraceContract = web3.eth.contract(address=contract_address, abi=contract_abi)
-    print("Smart contract loaded successfully! ⛓️")
+    print("Smart contract loaded successfully! ")
 except FileNotFoundError:
     print("Contract details not found. Please run blockchain_utils.py first.")
     AyurTraceContract = None
@@ -248,25 +248,34 @@ async def trace_herb(herb_id: int):
         return {"status": "error", "message": f"An error occurred while tracing herb: {e}"}
 
 
-# --- Endpoint 6: Contextual Advice for Collectors (LLM) ---
+# --- Endpoint 6: Contextual Advice for Collectors (LLM) ---from fastapi import FastAPI, Form, Query
+import ollama
+
+# Assume other imports and setup are already in place
+# ... (model loading, blockchain setup, etc.)
+
 @app.post("/llm_query/")
 async def llm_query(
-    question: str = Query(...),
-    herb_name: str = Query(None),
-    latitude: float = Query(None),
-    longitude: float = Query(None)
+    question: str = Form(...),
+    herb_name: str = Form(None),
+    location_name: str = Form(None)
 ):
-    # ... (previous code from the llm_query endpoint) ...
+    """
+    Provides contextual advice for collectors based on a user-provided location name.
+    """
     try:
+        # Construct the prompt with the user-provided location
         prompt = f"""
-        Role: You are a seasoned Ayurvedic herbalist and a local farmer from the region of India specified by the given latitude and longitude. Your knowledge is based on generations of traditional wisdom and is practical for the local environment.
-        Task: Based on the herb name '{herb_name}' and the location (latitude: {latitude}, longitude: {longitude}), provide a detailed answer to the following question: '{question}'.
+        Role: You are a seasoned Ayurvedic herbalist and a local farmer from the region of India, specifically {location_name}. Your knowledge is based on generations of traditional wisdom and is practical for the local environment.
+        Task: Based on the herb name '{herb_name}' and the location, provide a detailed answer to the following question: '{question}'.
         """
+        
         response = ollama.chat(
             model='gemma3:4b',
             messages=[{'role': 'user', 'content': prompt}]
         )
 
         return {"status": "success", "response": response['message']['content']}
+    
     except Exception as e:
         return {"status": "error", "message": f"An error occurred: {e}"}
