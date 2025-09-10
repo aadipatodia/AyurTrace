@@ -58,7 +58,7 @@ app = FastAPI()
 # --- Endpoint 1: Herb Traceability Submission (Farmer) ---
 @app.post("/submit_herb/")
 async def submit_herb(
-    herb_name: str = Form(...),
+    # herb_name is no longer needed here
     latitude: float = Form(...),
     longitude: float = Form(...),
     image_file: UploadFile = File(...)
@@ -78,10 +78,9 @@ async def submit_herb(
         print(f"AI Prediction: {ai_verified_species} with {confidence_score:.2f}% confidence.")
         
         if AyurTraceContract:
-            account = web3.eth.accounts[0] # Farmer's account
+            account = web3.eth.accounts[0]
             tx_hash = AyurTraceContract.functions.addHerb(
-                herb_name,
-                ai_verified_species,
+                ai_verified_species,    # The AI-verified name
                 int(confidence_score),
                 int(latitude * 1e6),
                 int(longitude * 1e6)
@@ -271,4 +270,3 @@ async def consumer_chat(
     
     except Exception as e:
         return {"status": "error", "message": f"An error occurred: {e}"}
-
