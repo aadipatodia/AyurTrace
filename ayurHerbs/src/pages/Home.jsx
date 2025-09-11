@@ -38,7 +38,6 @@ export default function Home({ colors, navigateTo, PAGES, userRole, ROLES }) {
 
   const stats = [
     { label: "Herbs Catalogued", value: "2,450+", icon: Database },
-    { label: "Active Users", value: "12,800+", icon: Users },
     { label: "Health Tips", value: "890+", icon: TrendingUp },
     { label: "Quality Approved", value: "98.5%", icon: Award },
   ];
@@ -161,17 +160,17 @@ export default function Home({ colors, navigateTo, PAGES, userRole, ROLES }) {
       {/* Stats Section */}
       <motion.section className="py-16" variants={itemVariants} >
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {stats.map((stat, index) => (
               <motion.div
                 key={stat.label}
-                className="p-6 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-[1.02]"
+                className="p-6 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-[1.02] text-center"
                 style={{ backgroundColor: colors.cardBackground }}
                 variants={itemVariants}
                 custom={index}
               >
                 <stat.icon
-                  className="text-4xl mb-3"
+                  className="text-4xl mx-auto mb-3"
                   style={{ color: colors.primaryGreen }}
                 />
                 <p className="text-3xl font-bold mb-1" style={{ color: colors.darkText }}>
