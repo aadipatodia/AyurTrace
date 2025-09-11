@@ -7,13 +7,12 @@ contract AyurTrace is AccessControl {
     bytes32 public constant PROCESSOR_ROLE = keccak256("PROCESSOR_ROLE");
 
     struct Herb {
-        string name;
-        string verifiedSpecies;
+        string name; // This will now be the AI-verified name
         uint256 confidenceScore;
         int latitude;
         int longitude;
         uint256 timestamp;
-        address farmer; // Original farmer's address
+        address farmer;
     }
 
     // Struct for subsequent processing steps
@@ -42,22 +41,19 @@ contract AyurTrace is AccessControl {
 
     
     function addHerb(
-        string memory _name,
-        string memory _verifiedSpecies,
+        string memory _name, // The AI-verified species from the backend
         uint256 _confidenceScore,
         int _latitude,
         int _longitude
-    ) public {
+        ) public {
         herbEntries[herbCount] = Herb({
             name: _name,
-            verifiedSpecies: _verifiedSpecies,
             confidenceScore: _confidenceScore,
             latitude: _latitude,
             longitude: _longitude,
             timestamp: block.timestamp,
             farmer: msg.sender
         });
-
         emit HerbAdded(herbCount, _name, msg.sender);
         herbCount++;
     }
