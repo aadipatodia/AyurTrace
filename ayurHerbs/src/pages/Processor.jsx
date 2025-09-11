@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaMapMarkerAlt, FaQrcode, FaSearch, FaPlusCircle, FaHistory, FaCamera } from "react-icons/fa";
+import { FaMapMarkerAlt, FaQrcode, FaSearch, FaPlusCircle, FaHistory, FaCamera, FaSpinner } from "react-icons/fa";
+import { Html5QrcodeScanner } from "html5-qrcode";
 
 export default function Processor({ colors = {} }) {
   const primaryGreen = colors.primaryGreen || "#4a7c59";
@@ -8,76 +9,128 @@ export default function Processor({ colors = {} }) {
   const lightGrey = colors.lightGrey || "#f0f4f7";
   const goldTan = colors.goldTan || "#a87f4c";
 
-  // Dummy data for demonstration
-  const allHerbEntries = [
-    { id: "batch-1a2b3c", name: "Echinacea", location: "40.7128, -74.0060", date: "2025-09-01" },
-    { id: "batch-4d5e6f", name: "Lavender", location: "34.0522, -118.2437", date: "2025-08-28" },
-    { id: "batch-7g8h9i", name: "Chamomile", location: "51.5074, -0.1278", date: "2025-09-02" },
-    { id: "batch-1j2k3l", name: "Peppermint", location: "34.0522, -118.2437", date: "2025-09-03" },
-  ];
-
-  // State for search and QR code scanning
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredEntries, setFilteredEntries] = useState(allHerbEntries);
   const [isScanning, setIsScanning] = useState(false);
+  const [qrCodeScanner, setQrCodeScanner] = useState(null);
 
-  // New states for the processing form
+  // New states for fetching and displaying data
+  const [verifiedHerbData, setVerifiedHerbData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [processingHerbId, setProcessingHerbId] = useState("");
   const [processingAction, setProcessingAction] = useState("");
-  const [processingBatchNumber, setProcessingBatchNumber] = useState("");
   const [processingHistory, setProcessingHistory] = useState([]);
   const [message, setMessage] = useState("");
 
-  // Filter entries whenever the search term changes
   useEffect(() => {
-    if (searchTerm) {
-      const filtered = allHerbEntries.filter(entry =>
-        entry.id.toLowerCase().includes(searchTerm.toLowerCase())
+    if (isScanning && !qrCodeScanner) {
+      const html5QrcodeScanner = new Html5QrcodeScanner(
+        "qr-code-reader",
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        false
       );
-      setFilteredEntries(filtered);
-    } else {
-      setFilteredEntries(allHerbEntries);
+      html5QrcodeScanner.render(onScanSuccess, onScanError);
+      setQrCodeScanner(html5QrcodeScanner);
     }
-  }, [searchTerm]);
+    return () => {
+      if (qrCodeScanner) {
+        qrCodeScanner.clear().catch(error => {
+          console.error("Failed to clear scanner", error);
+        });
+        setQrCodeScanner(null);
+      }
+    };
+  }, [isScanning]);
+
+  const onScanSuccess = (decodedText) => {
+    console.log(`Scan result: ${decodedText}`);
+    const urlParts = decodedText.split('/');
+    const herbId = urlParts[urlParts.length - 1];
+    setSearchTerm(herbId);
+    setProcessingHerbId(herbId);
+    setIsScanning(false);
+    handleSearch(herbId); // Automatically trigger search after scan
+  };
+
+  const onScanError = (error) => {
+    console.warn(`QR code scan error: ${error}`);
+  };
 
   const handleQrScan = () => {
     setIsScanning(true);
-    // Simulate a successful scan after 2 seconds
-    setTimeout(() => {
-      const scannedId = "batch-4d5e6f"; // Example scanned batch ID
-      setSearchTerm(scannedId);
-      setIsScanning(false);
-    }, 2000);
   };
-  
+
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
-  
-  const handleProcessSubmit = (e) => {
+
+  const handleSearch = async (herbId = searchTerm) => {
+    if (!herbId) {
+      setError("Please enter a Herb ID to search.");
+      setVerifiedHerbData(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/trace_herb/${herbId}`);
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      const data = await response.json();
+
+      if (data.status === "success") {
+        setVerifiedHerbData(data.data);
+        setError(null);
+        setProcessingHerbId(herbId);
+      } else {
+        setError(data.message || "Herb ID not found.");
+        setVerifiedHerbData(null);
+      }
+    } catch (err) {
+      setError(`An error occurred while fetching data: ${err.message}`);
+      setVerifiedHerbData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProcessSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
-    if (!processingHerbId || !processingAction || !processingBatchNumber) {
-      setMessage("All fields are required.");
+    if (!processingHerbId || !processingAction) {
+      setMessage("Herb ID and Action are required.");
       return;
     }
 
-    const newEntry = {
-      herbId: processingHerbId,
-      action: processingAction,
-      batchNumber: processingBatchNumber,
-      timestamp: new Date().toISOString(),
-    };
-    
-    // Simulate adding to history
-    setProcessingHistory([newEntry, ...processingHistory]);
-    setMessage("Processing step added successfully!");
+    try {
+      const formData = new FormData();
+      formData.append("action", processingAction);
 
-    // Clear the form
-    setProcessingHerbId("");
-    setProcessingAction("");
-    setProcessingBatchNumber("");
+      const response = await fetch(`http://127.0.0.1:8000/process_herb/${processingHerbId}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+
+      const data = await response.json();
+      if (data.status === "success") {
+        setMessage("Processing step added successfully!");
+        setProcessingAction("");
+        setProcessingHerbId("");
+        // Optionally, refresh the displayed data after a successful submission
+        handleSearch(processingHerbId);
+      } else {
+        setMessage(data.message);
+      }
+    } catch (err) {
+      setMessage(`An error occurred: ${err.message}`);
+    }
   };
 
   const itemVariants = {
@@ -104,11 +157,10 @@ export default function Processor({ colors = {} }) {
           <span style={{ color: goldTan }}>Processor</span> Dashboard
         </h1>
         <p className="max-w-3xl mx-auto text-lg" style={{ color: darkText }}>
-          Check and verify herb batch details including location and authenticity using our processor tools.
+          Check and verify herb batch details including location and authenticity.
         </p>
       </motion.div>
 
-      {/* Verify a Batch Section */}
       <motion.div
         className="w-full max-w-2xl relative rounded-2xl overflow-hidden shadow-2xl p-8 text-center mb-12"
         initial={{ opacity: 0, y: 20 }}
@@ -119,7 +171,7 @@ export default function Processor({ colors = {} }) {
         <h2 className="text-3xl font-bold mb-4" style={{ color: primaryGreen }}>
           Verify a Batch 🔍
         </h2>
-        <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 justify-center">
+        <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 justify-center items-center">
           <motion.button
             className="px-6 py-3 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105 flex items-center justify-center"
             style={{ backgroundColor: primaryGreen }}
@@ -129,21 +181,29 @@ export default function Processor({ colors = {} }) {
           >
             <FaQrcode className="mr-2" /> Scan QR Code
           </motion.button>
-          <div className="relative w-full md:w-auto">
-            <input
-              type="text"
-              placeholder="Search Batch ID..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="w-full px-6 py-3 rounded-full font-bold text-lg border-2 border-transparent focus:border-green-500 focus:outline-none transition-all"
-            />
-            <div className="absolute right-0 top-0 flex items-center h-full px-4 text-gray-400">
-              <FaSearch className="text-xl" />
+          <div className="relative w-full md:w-auto flex-1">
+            <div className="flex items-center">
+              <input
+                type="text"
+                placeholder="Enter Herb ID..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full px-6 py-3 rounded-full font-bold text-lg border-2 border-gray-300 focus:border-green-500 focus:outline-none transition-all"
+              />
+              <motion.button
+                type="button"
+                className="ml-2 px-4 py-3 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105"
+                style={{ backgroundColor: goldTan }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleSearch()}
+              >
+                <FaSearch />
+              </motion.button>
             </div>
           </div>
         </div>
-        
-        {/* QR Code Scanning UI */}
+
         <AnimatePresence>
           {isScanning && (
             <motion.div
@@ -154,9 +214,7 @@ export default function Processor({ colors = {} }) {
             >
               <FaCamera className="text-4xl mb-2 text-gray-600" />
               <p className="font-semibold text-gray-700">Scanning for QR code...</p>
-              <p className="text-sm text-gray-500">
-                (A camera feed would appear here in a real application)
-              </p>
+              <div id="qr-code-reader" style={{ width: '100%', maxWidth: '300px' }}></div>
               <button
                 onClick={() => setIsScanning(false)}
                 className="mt-2 text-sm text-red-500 font-semibold"
@@ -176,7 +234,6 @@ export default function Processor({ colors = {} }) {
           transition={{ delay: 0.6, duration: 0.8 }}
           style={{ backgroundColor: lightGrey }}
         >
-          {/* Form for adding a processing step */}
           <h2 className="text-2xl font-bold mb-4 flex items-center" style={{ color: primaryGreen }}>
             <FaPlusCircle className="mr-2" /> Add Processing Step
           </h2>
@@ -189,8 +246,9 @@ export default function Processor({ colors = {} }) {
                 type="text"
                 value={processingHerbId}
                 onChange={(e) => setProcessingHerbId(e.target.value)}
-                placeholder="e.g., batch-4d5e6f"
+                placeholder="e.g., 123"
                 className="w-full p-2 border rounded"
+                disabled={!verifiedHerbData}
               />
             </div>
             <div>
@@ -203,18 +261,7 @@ export default function Processor({ colors = {} }) {
                 onChange={(e) => setProcessingAction(e.target.value)}
                 placeholder="e.g., Packaged, Dried"
                 className="w-full p-2 border rounded"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: darkText }}>
-                Batch Number
-              </label>
-              <input
-                type="text"
-                value={processingBatchNumber}
-                onChange={(e) => setProcessingBatchNumber(e.target.value)}
-                placeholder="e.g., BATCH-001"
-                className="w-full p-2 border rounded"
+                disabled={!verifiedHerbData}
               />
             </div>
             <motion.button
@@ -223,6 +270,7 @@ export default function Processor({ colors = {} }) {
               style={{ backgroundColor: primaryGreen }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              disabled={!verifiedHerbData}
             >
               Submit Step
             </motion.button>
@@ -230,7 +278,6 @@ export default function Processor({ colors = {} }) {
           </form>
         </motion.div>
 
-        {/* Recent Herb Entries Section */}
         <motion.div
           className="w-full md:w-1/3 p-6 rounded-2xl shadow-xl"
           style={{ backgroundColor: lightGrey }}
@@ -239,70 +286,44 @@ export default function Processor({ colors = {} }) {
           transition={{ delay: 0.8, duration: 0.8 }}
         >
           <h3 className="text-xl font-bold mb-4 flex items-center" style={{ color: primaryGreen }}>
-            <FaMapMarkerAlt className="mr-2" /> Recent Herb Entries
+            <FaMapMarkerAlt className="mr-2" /> Herb Details
           </h3>
-          <motion.ul
-            className="space-y-4"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              visible: {
-                transition: {
-                  staggerChildren: 0.1,
-                },
-              },
-            }}
-          >
-            {filteredEntries.length > 0 ? (
-              filteredEntries.map((entry, index) => (
-                <motion.li
-                  key={entry.id}
-                  className="p-4 rounded-xl border-l-4"
-                  style={{ borderColor: goldTan, backgroundColor: "white" }}
-                  variants={itemVariants}
-                  custom={index}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-800">{entry.name}</span>
-                    <span className="text-xs font-mono text-gray-500">ID: {entry.id}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">Location: {entry.location}</p>
-                  <p className="text-xs text-gray-400">Date: {entry.date}</p>
-                </motion.li>
-              ))
-            ) : (
-              <p className="text-center text-gray-500">No matching entries found.</p>
-            )}
-          </motion.ul>
+          {loading && <FaSpinner className="animate-spin text-4xl mx-auto" style={{ color: primaryGreen }} />}
+          {error && <p className="text-red-500 text-center">{error}</p>}
+          {verifiedHerbData && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <p><strong>Name:</strong> {verifiedHerbData.origin.name}</p>
+              <p><strong>AI Confidence:</strong> {verifiedHerbData.origin.confidenceScore}%</p>
+              <p><strong>Farmer:</strong> {verifiedHerbData.origin.farmer}</p>
+              <p><strong>Location:</strong> {verifiedHerbData.origin.latitude.toFixed(4)}, {verifiedHerbData.origin.longitude.toFixed(4)}</p>
+              <p><strong>Timestamp:</strong> {new Date(verifiedHerbData.origin.timestamp * 1000).toLocaleString()}</p>
+              
+              <h4 className="font-bold mt-4" style={{ color: darkText }}>Processing History:</h4>
+              <ul className="list-disc list-inside space-y-2">
+                {verifiedHerbData.processingHistory.length > 0 ? (
+                  verifiedHerbData.processingHistory.map((step, index) => (
+                    <li key={index}>
+                      <p><strong>Action:</strong> {step.action}</p>
+                      <p className="text-sm text-gray-600">Batch: {step.batchNumber}</p>
+                      <p className="text-sm text-gray-600">Processor: {step.processor}</p>
+                      <p className="text-xs text-gray-500">Time: {new Date(step.timestamp * 1000).toLocaleString()}</p>
+                    </li>
+                  ))
+                ) : (
+                  <p className="text-gray-500">No processing steps recorded yet.</p>
+                )}
+              </ul>
+            </motion.div>
+          )}
+          {!loading && !error && !verifiedHerbData && (
+            <p className="text-center text-gray-500">Search for a herb ID to see its details.</p>
+          )}
         </motion.div>
       </div>
-
-      {/* Processing History Section */}
-      {processingHistory.length > 0 && (
-        <motion.div
-          className="w-full max-w-7xl mt-8 p-6 rounded-2xl shadow-xl"
-          style={{ backgroundColor: lightGrey }}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1, duration: 0.8 }}
-        >
-          <h3 className="text-xl font-bold mb-4 flex items-center" style={{ color: primaryGreen }}>
-            <FaHistory className="mr-2" /> Processing History
-          </h3>
-          <ul className="space-y-4">
-            {processingHistory.map((step, index) => (
-              <li key={index} className="p-4 rounded-xl border-l-4" style={{ borderColor: goldTan, backgroundColor: "white" }}>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-gray-800">Herb ID: {step.herbId}</span>
-                  <span className="text-xs font-mono text-gray-500">{new Date(step.timestamp).toLocaleString()}</span>
-                </div>
-                <p className="text-sm text-gray-600 mt-1">Action: {step.action}</p>
-                <p className="text-xs text-gray-400">Batch Number: {step.batchNumber}</p>
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-      )}
     </div>
   );
 }

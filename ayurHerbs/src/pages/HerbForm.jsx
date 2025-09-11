@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaCamera, FaUpload, FaMapMarkerAlt, FaCheckCircle, FaSpinner, FaLeaf, FaTimes, FaEdit } from "react-icons/fa";
+import { FaCamera, FaUpload, FaMapMarkerAlt, FaCheckCircle, FaSpinner, FaTimes, FaEdit, FaQrcode } from "react-icons/fa";
 
 function HerbForm({ colors = {} }) {
   const primaryGreen = colors.primaryGreen || "#4a7c59";
@@ -15,6 +15,8 @@ function HerbForm({ colors = {} }) {
   const [loading, setLoading] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState(null);
+  const [herbId, setHerbId] = useState(null); // New state for herb ID
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -79,6 +81,8 @@ function HerbForm({ colors = {} }) {
     setLocation(null);
     setEditedHerbName("");
     setSubmissionStatus(null);
+    setQrCodeUrl(null);
+    setHerbId(null);
 
     if (!image) {
       setError("Please take a photo or upload an image first.");
@@ -127,14 +131,21 @@ function HerbForm({ colors = {} }) {
       }
 
       const data = await response.json();
-      
+
       if (data.status === "success") {
         setIdentificationResult({
           herb: data.ai_result.verified_species,
           confidence: parseFloat(data.ai_result.confidence),
         });
         setEditedHerbName(data.ai_result.verified_species);
-        setSubmissionStatus("review");
+        setHerbId(data.herb_id); // Store the herb ID
+
+        // Fetch the QR code from the new backend endpoint
+        const qrResponse = await fetch(`http://127.0.0.1:8000/generate_qr/${data.herb_id}`);
+        const qrBlob = await qrResponse.blob();
+        setQrCodeUrl(URL.createObjectURL(qrBlob));
+
+        setSubmissionStatus("success");
       } else {
         setError(data.message);
         setSubmissionStatus("error");
@@ -152,7 +163,6 @@ function HerbForm({ colors = {} }) {
     setError("");
 
     // Simulate sending the corrected name to a backend endpoint
-    // This part of the code assumes you have a backend endpoint to handle corrections
     // For now, it will just show a success message
     try {
       setTimeout(() => {
@@ -172,6 +182,8 @@ function HerbForm({ colors = {} }) {
     setIdentificationResult(null);
     setEditedHerbName("");
     setSubmissionStatus(null);
+    setQrCodeUrl(null);
+    setHerbId(null);
   };
 
   return (
@@ -305,10 +317,20 @@ function HerbForm({ colors = {} }) {
               <p className="text-gray-600">Your entry has been recorded on the blockchain.</p>
               <div className="mt-6 p-6 rounded-xl shadow-lg border-l-4 text-left" style={{ borderColor: primaryGreen, backgroundColor: lightGrey }}>
                 <p><strong>Herb Name:</strong> {editedHerbName}</p>
+                <p><strong>Herb ID:</strong> {herbId}</p> {/* Display the herb ID */}
                 <p><strong>Location:</strong> {location.lat?.toFixed(4)}, {location.lng?.toFixed(4)}</p>
                 <p><strong>Timestamp:</strong> {new Date().toLocaleString()}</p>
                 {image && <img src={image} alt="Submitted" className="mt-4 rounded-lg shadow-md max-h-48 object-contain" />}
               </div>
+              {qrCodeUrl && (
+                <div className="mt-6 p-6 rounded-xl shadow-lg text-center" style={{ backgroundColor: 'white' }}>
+                    <h3 className="text-2xl font-bold mb-4 flex items-center justify-center" style={{ color: primaryGreen }}>
+                        <FaQrcode className="mr-2" /> Print this QR Code
+                    </h3>
+                    <img src={qrCodeUrl} alt="QR Code for Herb" className="mx-auto w-48 h-48 mb-4" />
+                    <p className="text-gray-600 text-sm">Attach this code to your herb batch for traceability.</p>
+                </div>
+              )}
               <button
                 onClick={resetForm}
                 className="mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
