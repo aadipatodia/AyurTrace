@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaCamera, FaUpload, FaMapMarkerAlt, FaCheckCircle, FaSpinner, FaHistory } from "react-icons/fa";
+import { FaCamera, FaUpload, FaMapMarkerAlt, FaCheckCircle, FaSpinner, FaHistory, FaLeaf, FaTimes } from "react-icons/fa";
 
 function HerbForm({ colors = {} }) {
   const primaryGreen = colors.primaryGreen || "#4a7c59";
@@ -15,6 +15,9 @@ function HerbForm({ colors = {} }) {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [isCameraActive, setIsCameraActive] = useState(false);
+  
+  // New state for the identification model result
+  const [identificationResult, setIdentificationResult] = useState(null);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -28,138 +31,166 @@ function HerbForm({ colors = {} }) {
     setImage(null);
     setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       streamRef.current = stream;
       videoRef.current.srcObject = stream;
       setIsCameraActive(true);
     } catch (err) {
-      console.error("Error accessing the camera:", err);
-      setError("Unable to access your camera. Please check permissions.");
+      setError("Could not access camera. Please allow camera permissions.");
+    }
+  };
+
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext("2d");
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+      context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      const photo = canvasRef.current.toDataURL("image/png");
+      setImage(photo);
+      stopCamera();
+    }
+  };
+
+  const handleImageUpload = (e) => {
+    setError("");
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImage(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setIsCameraActive(false);
-  };
-
-  const takePhoto = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const photoDataUrl = canvas.toDataURL('image/png');
-    setImage(photoDataUrl);
-    stopCamera();
-    nextStep();
-  };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setImage(imageUrl);
-      setError("");
-      nextStep();
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      setIsCameraActive(false);
     }
   };
 
   const getLocation = () => {
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser.");
+    setError("");
+    setLoading(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            timestamp: new Date().toISOString(),
+            id: generateId(),
+          });
+          setLoading(false);
+          setStep(4);
+        },
+        (err) => {
+          setError("Could not retrieve location. Please check your browser settings.");
+          setLoading(false);
+        }
+      );
+    } else {
+      setError("Geolocation is not supported by this browser.");
+      setLoading(false);
+    }
+  };
+
+  // New function to handle herb identification
+  const handleIdentification = () => {
+    setLoading(true);
+    setError("");
+    if (!image) {
+      setError("Please take a photo or upload an image first.");
+      setLoading(false);
       return;
     }
-    setError("");
-    setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          timestamp: Date.now(),
-          id: generateId(),
-        });
-        setLoading(false);
-        nextStep();
-      },
-      (geoError) => {
-        setError("Unable to retrieve your location. " + geoError.message);
-        setLoading(false);
-      }
-    );
+
+    // Simulate a machine learning model prediction
+    setTimeout(() => {
+      // Dummy data for demonstration purposes
+      const predictions = [
+        { herb: "Echinacea", confidence: 95.2 },
+        { herb: "Chamomile", confidence: 91.8 },
+        { herb: "Ginseng", confidence: 88.5 },
+      ];
+      
+      const result = predictions[Math.floor(Math.random() * predictions.length)];
+      setIdentificationResult(result);
+      setLoading(false);
+      setStep(2); // Move to the new step 2
+    }, 2000);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = (e) => {
+    e.preventDefault();
     setLoading(true);
     setError("");
-    setSuccessMessage("");
-    try {
-      // Simulate API call to upload data
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const newEntry = {
-        id: location.id,
-        image,
-        location,
-        date: new Date().toISOString().split("T")[0],
-      };
-      setHistory((prevHistory) => [newEntry, ...prevHistory]);
-      setSuccessMessage("Herb entry submitted successfully!");
-      setLoading(false);
-      setStep(4);
-    } catch (submitError) {
-      setError("Failed to submit data. Please try again.");
-      setLoading(false);
-    }
-  };
 
-  const prevStep = () => {
-    setStep(step - 1);
-  };
-
-  const nextStep = () => {
-    setStep(step + 1);
+    // Simulate form submission to a backend/blockchain
+    setTimeout(() => {
+      setLoading(false);
+      setSuccessMessage("Your herb entry has been successfully submitted!");
+      setHistory((prevHistory) => [...prevHistory, { ...location, image, identifiedHerb: identificationResult?.herb }]);
+      setStep(5);
+    }, 1500);
   };
 
   const resetForm = () => {
     setStep(1);
     setImage(null);
     setLocation({ lat: null, lng: null, timestamp: null, id: null });
+    setError("");
     setSuccessMessage("");
+    setIdentificationResult(null);
   };
 
   const stepVariants = {
-    hidden: { opacity: 0, x: -50, scale: 0.8 },
-    visible: { opacity: 1, x: 0, scale: 1 },
-    exit: { opacity: 0, x: 50, scale: 0.8 },
-  };
-
-  const formVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
+    hidden: { opacity: 0, x: -50 },
+    visible: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: 50 },
   };
 
   return (
     <motion.div
-      className="flex flex-col items-center p-8 min-h-[70vh] relative"
-      initial="hidden"
-      animate="visible"
-      variants={formVariants}
+      className="flex flex-col items-center justify-center p-8 min-h-[70vh]"
+      style={{ backgroundColor: colors.background }}
     >
-      <h1 className="text-4xl font-extrabold mb-4" style={{ color: primaryGreen }}>
-        Add a New Herb Entry
-      </h1>
-      <p className="text-lg mb-8 text-center max-w-xl" style={{ color: colors.darkText }}>
-        Follow the steps to document a new herb:
-      </p>
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8">
+        <h1 className="text-3xl font-bold mb-6 text-center" style={{ color: primaryGreen }}>
+          Herb Contribution Form
+        </h1>
+        <div className="flex justify-between w-full mb-8">
+          {[1, 2, 3, 4, 5].map((s) => (
+            <div key={s} className="flex flex-col items-center">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition-all duration-300 ${
+                  step >= s ? "scale-110" : "scale-100"
+                }`}
+                style={{ backgroundColor: step >= s ? primaryGreen : lightGrey }}
+              >
+                {step > s ? <FaCheckCircle /> : s}
+              </div>
+              <span className={`text-sm mt-1 ${step >= s ? "font-semibold" : "text-gray-500"}`}>
+                Step {s}
+              </span>
+            </div>
+          ))}
+        </div>
 
-      <div className="w-full max-w-2xl bg-white shadow-xl rounded-2xl p-8 transition-colors duration-500 overflow-hidden">
+        {error && (
+          <motion.div
+            className="p-4 rounded-xl text-center font-medium bg-red-100 text-red-600 mb-6"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            {error}
+          </motion.div>
+        )}
+
         <AnimatePresence mode="wait">
-          {/* Step 1: Image Capture/Upload */}
           {step === 1 && (
             <motion.div
               key="step1"
@@ -169,47 +200,57 @@ function HerbForm({ colors = {} }) {
               exit="exit"
               className="text-center"
             >
-              <h2 className="text-3xl font-semibold mb-6">Step 1: Add a Photo</h2>
-              <p className="mb-4">Choose how you would like to add an image of the herb.</p>
-              
-              <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 justify-center">
-                <button
-                  onClick={startCamera}
-                  className="py-3 px-6 rounded-lg font-bold text-white transition-all duration-200"
-                  style={{ backgroundColor: goldTan }}
-                >
-                  <FaCamera className="inline-block mr-2" />
-                  Take Photo
-                </button>
-                <label className="py-3 px-6 rounded-lg font-bold text-white transition-all duration-200 cursor-pointer" style={{ backgroundColor: primaryGreen }}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                  <FaUpload className="inline-block mr-2" />
-                  Upload Image
-                </label>
-              </div>
-
-              {isCameraActive && (
-                <div className="mt-8 flex flex-col items-center">
-                  <video ref={videoRef} autoPlay playsInline className="w-full max-w-md rounded-lg shadow-lg" />
-                  <button onClick={takePhoto} className="mt-4 py-3 px-6 rounded-lg font-bold text-white" style={{ backgroundColor: goldTan }}>
-                    Capture Photo
+              <h2 className="text-3xl font-semibold mb-4">Capture Herb Image</h2>
+              <p className="mb-6 text-gray-600">
+                Use your camera or upload a photo of the herb you are contributing.
+              </p>
+              <div className="flex flex-col items-center justify-center space-y-4">
+                {image ? (
+                  <div className="relative w-full max-w-xs">
+                    <img src={image} alt="Herb" className="rounded-lg shadow-lg max-h-64 object-contain mx-auto" />
+                    <button
+                      onClick={() => setImage(null)}
+                      className="absolute top-2 right-2 text-white bg-red-500 rounded-full p-1 hover:bg-red-600"
+                    >
+                      <FaTimes />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full h-64 border-2 border-dashed rounded-lg flex items-center justify-center" style={{ borderColor: lightGrey }}>
+                    <div className="flex flex-col items-center text-gray-400">
+                      <FaCamera size={48} />
+                      <p className="mt-2 text-sm">No image captured or uploaded</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex space-x-4">
+                  <button
+                    onClick={startCamera}
+                    className="flex items-center space-x-2 py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
+                    style={{ backgroundColor: primaryGreen }}
+                  >
+                    <FaCamera />
+                    <span>Open Camera</span>
                   </button>
-                  <button onClick={stopCamera} className="mt-2 py-2 px-4 rounded-lg text-sm text-gray-600">
-                    Cancel Camera
-                  </button>
-                  <canvas ref={canvasRef} style={{ display: 'none' }} />
+                  <label htmlFor="file-upload" className="flex items-center space-x-2 py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200 cursor-pointer" style={{ backgroundColor: goldTan }}>
+                    <FaUpload />
+                    <span>Upload Image</span>
+                  </label>
+                  <input id="file-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                 </div>
+              </div>
+              {image && (
+                <button
+                  onClick={handleIdentification}
+                  className="mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
+                  style={{ backgroundColor: primaryGreen }}
+                >
+                  {loading ? <FaSpinner className="animate-spin mx-auto" /> : "Identify Herb"}
+                </button>
               )}
-              {error && <p className="text-red-500 font-bold text-center mt-4">{error}</p>}
             </motion.div>
           )}
 
-          {/* Step 2: Location and Review */}
           {step === 2 && (
             <motion.div
               key="step2"
@@ -219,42 +260,37 @@ function HerbForm({ colors = {} }) {
               exit="exit"
               className="text-center"
             >
-              <h2 className="text-3xl font-semibold mb-6">Step 2: Get Location</h2>
-              {image && (
-                <img
-                  src={image}
-                  alt="Captured Herb"
-                  className="w-full h-auto rounded-lg mb-4 shadow-lg"
-                />
-              )}
-              <p className="text-lg font-medium mb-4">Click to add the current location.</p>
-              <button
-                onClick={getLocation}
-                disabled={loading}
-                className={`py-3 px-6 rounded-lg font-bold text-white transition-all duration-200 ${
-                  loading ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
-                }`}
-              >
-                {loading ? (
-                  <FaSpinner className="animate-spin inline-block mr-2" />
-                ) : (
-                  <FaMapMarkerAlt className="inline-block mr-2" />
-                )}
-                {loading ? "Fetching Location..." : "Get My Location"}
-              </button>
-              {error && <p className="text-red-500 font-bold text-center mt-4">{error}</p>}
-              <div className="flex justify-between mt-4">
+              <h2 className="text-3xl font-semibold mb-4">Confirm Identification</h2>
+              <p className="mb-6 text-gray-600">
+                The AI model has analyzed the image. Please confirm the result.
+              </p>
+              <div className="p-6 rounded-xl shadow-lg border-l-4" style={{ borderColor: primaryGreen, backgroundColor: lightGrey }}>
+                <h3 className="text-xl font-bold mb-2 flex items-center justify-center" style={{ color: primaryGreen }}>
+                    <FaLeaf className="mr-2" />
+                    Predicted Herb: {identificationResult.herb}
+                </h3>
+                <p className="font-semibold text-sm text-gray-600">
+                    Confidence: <span style={{ color: primaryGreen }}>{identificationResult.confidence}%</span>
+                </p>
+              </div>
+              <div className="flex space-x-4 mt-6">
                 <button
-                  onClick={prevStep}
-                  className="py-3 px-6 rounded-lg font-semibold bg-gray-300 text-gray-800 transition-colors"
+                  onClick={() => setStep(1)}
+                  className="flex-1 py-3 px-6 rounded-lg font-semibold transition-all duration-200 bg-gray-300 text-gray-800 hover:bg-gray-400"
                 >
-                  Back
+                  Go Back
+                </button>
+                <button
+                  onClick={() => setStep(3)}
+                  className="flex-1 py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
+                  style={{ backgroundColor: primaryGreen }}
+                >
+                  Confirm and Continue
                 </button>
               </div>
             </motion.div>
           )}
-
-          {/* Step 3: Confirmation and Submit */}
+          
           {step === 3 && (
             <motion.div
               key="step3"
@@ -264,52 +300,59 @@ function HerbForm({ colors = {} }) {
               exit="exit"
               className="text-center"
             >
-              <h2 className="text-3xl font-semibold mb-6">Step 3: Confirm & Submit</h2>
-              {image && (
-                <img
-                  src={image}
-                  alt="Captured Herb"
-                  className="w-full h-auto rounded-lg mb-4 shadow-lg"
-                />
-              )}
-              <p className="font-medium">Please review the details before submitting.</p>
+              <h2 className="text-3xl font-semibold mb-4">Capture Location</h2>
+              <p className="mb-6 text-gray-600">
+                Please allow us to use your device's location to geotag this entry.
+              </p>
               {location.lat && (
-                <p className="font-medium">
-                  Location: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
-                </p>
+                <div className="mb-4 p-4 rounded-xl shadow-inner font-mono text-sm" style={{ backgroundColor: lightGrey }}>
+                  <p>Location captured successfully:</p>
+                  <p>Lat: {location.lat.toFixed(4)}, Lng: {location.lng.toFixed(4)}</p>
+                  <p className="text-xs text-gray-500">{location.timestamp}</p>
+                </div>
               )}
-              {successMessage && <p className="text-green-600 font-bold text-center mt-4">{successMessage}</p>}
-              {error && <p className="text-red-500 font-bold text-center mt-4">{error}</p>}
-
-              <div className="flex justify-between mt-4">
-                <button
-                  onClick={prevStep}
-                  className="py-3 px-6 rounded-lg font-semibold bg-gray-300 text-gray-800 transition-colors"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className={`py-3 px-6 rounded-lg font-bold text-white transition-all duration-200 ${
-                    loading ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
-                  }`}
-                >
-                  {loading ? (
-                    <FaSpinner className="animate-spin inline-block mr-2" />
-                  ) : (
-                    <FaCheckCircle className="inline-block mr-2" />
-                  )}
-                  {loading ? "Submitting..." : "Submit"}
-                </button>
-              </div>
+              <button
+                onClick={getLocation}
+                className="w-full py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
+                style={{ backgroundColor: primaryGreen }}
+              >
+                {loading ? <FaSpinner className="animate-spin mx-auto" /> : "Get Location"}
+              </button>
             </motion.div>
           )}
-          
-          {/* Step 4: Submission History */}
+
           {step === 4 && (
             <motion.div
               key="step4"
+              variants={stepVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="text-center"
+            >
+              <h2 className="text-3xl font-semibold mb-4">Review & Submit</h2>
+              <p className="mb-6 text-gray-600">
+                Review your details before submitting to the blockchain.
+              </p>
+              <div className="p-6 rounded-xl shadow-lg border-l-4 text-left" style={{ borderColor: primaryGreen, backgroundColor: lightGrey }}>
+                <p><strong>Herb:</strong> {identificationResult.herb}</p>
+                <p><strong>Location:</strong> {location.lat.toFixed(4)}, {location.lng.toFixed(4)}</p>
+                <p><strong>Timestamp:</strong> {new Date(location.timestamp).toLocaleString()}</p>
+                <img src={image} alt="Review" className="mt-4 rounded-lg shadow-md max-h-48 object-contain" />
+              </div>
+              <button
+                onClick={handleSubmit}
+                className="mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
+                style={{ backgroundColor: goldTan }}
+              >
+                {loading ? <FaSpinner className="animate-spin mx-auto" /> : "Submit to Blockchain"}
+              </button>
+            </motion.div>
+          )}
+
+          {step === 5 && (
+            <motion.div
+              key="step5"
               variants={stepVariants}
               initial="hidden"
               animate="visible"
@@ -323,8 +366,16 @@ function HerbForm({ colors = {} }) {
                   history.map((entry) => (
                     <div key={entry.id} className="p-4 rounded-lg border" style={{ borderColor: lightGrey }}>
                       <p><strong>ID:</strong> {entry.id}</p>
-                      <p><strong>Date:</strong> {entry.date}</p>
-                      <p><strong>Location:</strong> {entry.location.lat.toFixed(4)}, {entry.location.lng.toFixed(4)}</p>
+                      <p><strong>Herb:</strong> {entry.identifiedHerb || 'N/A'}</p>
+                      <p><strong>Date:</strong> {new Date(entry.timestamp).toLocaleString()}</p>
+                      <p>
+                        <strong>Location:</strong>{" "}
+                        {entry.location ? (
+                            `${entry.location.lat.toFixed(4)}, ${entry.location.lng.toFixed(4)}`
+                        ) : (
+                            "Not available"
+                        )}
+                      </p>
                     </div>
                   ))
                 ) : (
