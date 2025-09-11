@@ -1,15 +1,15 @@
-import aiofiles
-import json
 from fastapi import FastAPI, UploadFile, File, Form, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from web3 import Web3
 import ollama
+import json
+import io
 
 # --- AI Model Imports ---
 import tensorflow as tf
 import numpy as np
 from PIL import Image
-import io
 
 # --- Load the AI model and define class names ---
 try:
@@ -17,10 +17,10 @@ try:
     print("AI model 'herb_classifier.h5' loaded successfully! ")
     
     class_names = [
-        'Aloevera', 'Amla', 'Amruta_Balli', 'Arali', 'Ashoka', 'Ashwagandha', 'Avacado', 'Bamboo', 'Basale', 'Betel', 
-        'Betel_Nut', 'Brahmi', 'Castor', 'Curry_Leaf', 'Doddapatre', 'Ekka', 'Ganike', 'Gauva', 'Geranium', 'Henna', 
-        'Hibiscus', 'Honge', 'Insulin', 'Jasmine', 'Lemon', 'Lemon_grass', 'Mango', 'Mint', 'Nagadali', 'Neem', 'Nithyapushpa', 
-        'Nooni', 'Pappaya', 'Pepper', 'Pomegranate', 'Raktachandini', 'Rose', 'Sapota', 'Tulasi', 'Wood_sorel'
+        'Nooni', 'Nithyapushpa', 'Basale', 'Pomegranate', 'Honge', 'Lemon_grass', 'Mint', 'Betel_Nut', 'Nagadali', 
+        'Curry_Leaf', 'Jasmine', 'Castor', 'Sapota', 'Neem', 'Ashoka', 'Brahmi', 'Amruta_Balli', 'Pappaya', 'Pepper', 
+        'Wood_sorel', 'Gauva', 'Hibiscus', 'Ashwagandha', 'Aloevera', 'Raktachandini', 'Insulin', 'Bamboo', 'Amla', 'Arali', 
+        'Geranium', 'Avacado', 'Lemon', 'Ekka', 'Betel', 'Henna', 'Doddapatre', 'Rose', 'Mango', 'Tulasi', 'Ganike'
     ]
 
 except (IOError, ImportError) as e:
@@ -55,10 +55,25 @@ except FileNotFoundError:
 # --- FastAPI Application ---
 app = FastAPI()
 
+# Add CORS middleware to allow requests from your frontend
+origins = [
+    "http://localhost",
+    "http://localhost:5173", # This is the typical port for Vite development server
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # --- Endpoint 1: Herb Traceability Submission (Farmer) ---
 @app.post("/submit_herb/")
 async def submit_herb(
-    # herb_name is no longer needed here
     latitude: float = Form(...),
     longitude: float = Form(...),
     image_file: UploadFile = File(...)
