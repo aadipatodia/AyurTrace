@@ -9,6 +9,7 @@ function HerbForm({ colors = {} }) {
 
   const [step, setStep] = useState(1);
   const [image, setImage] = useState(null);
+  const [file, setFile] = useState(null); // New state to hold the file object
   const [location, setLocation] = useState({ lat: null, lng: null, timestamp: null, id: null });
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
@@ -16,7 +17,6 @@ function HerbForm({ colors = {} }) {
   const [successMessage, setSuccessMessage] = useState("");
   const [isCameraActive, setIsCameraActive] = useState(false);
   
-  // New state for the identification model result
   const [identificationResult, setIdentificationResult] = useState(null);
 
   const videoRef = useRef(null);
@@ -29,6 +29,7 @@ function HerbForm({ colors = {} }) {
 
   const startCamera = async () => {
     setImage(null);
+    setFile(null); // Reset the file state
     setError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -47,20 +48,33 @@ function HerbForm({ colors = {} }) {
       canvasRef.current.height = videoRef.current.videoHeight;
       context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
       const photo = canvasRef.current.toDataURL("image/png");
+      
+      // Convert Data URL to Blob, then to File for API submission
+      const byteString = atob(photo.split(',')[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: 'image/png' });
+      const photoFile = new File([blob], "herb-photo.png", { type: 'image/png' });
+
       setImage(photo);
+      setFile(photoFile); // Set the file state
       stopCamera();
     }
   };
 
   const handleImageUpload = (e) => {
     setError("");
-    const file = e.target.files[0];
-    if (file) {
+    const uploadedFile = e.target.files[0];
+    if (uploadedFile) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setImage(reader.result);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(uploadedFile);
+      setFile(uploadedFile); // Set the file state
     }
   };
 
@@ -97,49 +111,93 @@ function HerbForm({ colors = {} }) {
     }
   };
 
-  // New function to handle herb identification
-  const handleIdentification = () => {
+  // Connects to the FastAPI /submit_herb endpoint for identification
+  const handleIdentification = async () => {
     setLoading(true);
     setError("");
-    if (!image) {
+    if (!file) { // Use the `file` state
       setError("Please take a photo or upload an image first.");
       setLoading(false);
       return;
     }
 
-    // Simulate a machine learning model prediction
-    setTimeout(() => {
-      // Dummy data for demonstration purposes
-      const predictions = [
-        { herb: "Echinacea", confidence: 95.2 },
-        { herb: "Chamomile", confidence: 91.8 },
-        { herb: "Ginseng", confidence: 88.5 },
-      ];
-      
-      const result = predictions[Math.floor(Math.random() * predictions.length)];
-      setIdentificationResult(result);
-      setLoading(false);
-      setStep(2); // Move to the new step 2
-    }, 2000);
+    const formData = new FormData();
+    formData.append("latitude", 0); // Placeholder, as latitude and longitude are required but not used for identification.
+    formData.append("longitude", 0);
+    formData.append("image_file", file); // Send the file object
+
+    try {
+        const response = await fetch("http://127.0.0.1:8000/submit_herb/", {
+            method: "POST",
+            body: formData,
+        });
+
+        const data = await response.json();
+        
+        if (data.status === "success") {
+            setIdentificationResult({
+                herb: data.ai_result.verified_species,
+                confidence: parseFloat(data.ai_result.confidence),
+            });
+            setStep(2); // Move to the confirmation step
+        } else {
+            setError(data.message || "An error occurred during identification.");
+        }
+    } catch (err) {
+        setError("Failed to connect to the identification service. Please try again.");
+    } finally {
+        setLoading(false);
+    }
   };
 
-  const handleSubmit = (e) => {
+  // Submits to the FastAPI /submit_herb endpoint with real data
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    // Simulate form submission to a backend/blockchain
-    setTimeout(() => {
-      setLoading(false);
-      setSuccessMessage("Your herb entry has been successfully submitted!");
-      setHistory((prevHistory) => [...prevHistory, { ...location, image, identifiedHerb: identificationResult?.herb }]);
-      setStep(5);
-    }, 1500);
+    if (!file || !location.lat) {
+        setError("Missing image or location data.");
+        setLoading(false);
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("latitude", location.lat);
+    formData.append("longitude", location.lng);
+    formData.append("image_file", file);
+
+    try {
+        const response = await fetch("http://127.0.0.1:8000/submit_herb/", {
+            method: "POST",
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (data.status === "success") {
+            setSuccessMessage("Your herb entry has been successfully submitted!");
+            setHistory((prevHistory) => [...prevHistory, { 
+                ...location, 
+                image, 
+                identifiedHerb: identificationResult?.herb, 
+                id: generateId(),
+            }]);
+            setStep(5);
+        } else {
+            setError(data.message || "An error occurred during submission.");
+        }
+    } catch (err) {
+        setError("Failed to submit data. Please check the backend connection.");
+    } finally {
+        setLoading(false);
+    }
   };
 
   const resetForm = () => {
     setStep(1);
     setImage(null);
+    setFile(null); // Reset the file state
     setLocation({ lat: null, lng: null, timestamp: null, id: null });
     setError("");
     setSuccessMessage("");
@@ -209,7 +267,7 @@ function HerbForm({ colors = {} }) {
                   <div className="relative w-full max-w-xs">
                     <img src={image} alt="Herb" className="rounded-lg shadow-lg max-h-64 object-contain mx-auto" />
                     <button
-                      onClick={() => setImage(null)}
+                      onClick={() => { setImage(null); setFile(null); }}
                       className="absolute top-2 right-2 text-white bg-red-500 rounded-full p-1 hover:bg-red-600"
                     >
                       <FaTimes />
@@ -223,14 +281,17 @@ function HerbForm({ colors = {} }) {
                     </div>
                   </div>
                 )}
+                {isCameraActive && (
+                  <video ref={videoRef} autoPlay playsInline className="w-full max-w-xs rounded-lg shadow-lg" />
+                )}
                 <div className="flex space-x-4">
                   <button
-                    onClick={startCamera}
+                    onClick={isCameraActive ? takePhoto : startCamera}
                     className="flex items-center space-x-2 py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
                     style={{ backgroundColor: primaryGreen }}
                   >
                     <FaCamera />
-                    <span>Open Camera</span>
+                    <span>{isCameraActive ? "Take Photo" : "Open Camera"}</span>
                   </button>
                   <label htmlFor="file-upload" className="flex items-center space-x-2 py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200 cursor-pointer" style={{ backgroundColor: goldTan }}>
                     <FaUpload />
@@ -338,7 +399,7 @@ function HerbForm({ colors = {} }) {
                 <p><strong>Herb:</strong> {identificationResult.herb}</p>
                 <p><strong>Location:</strong> {location.lat.toFixed(4)}, {location.lng.toFixed(4)}</p>
                 <p><strong>Timestamp:</strong> {new Date(location.timestamp).toLocaleString()}</p>
-                <img src={image} alt="Review" className="mt-4 rounded-lg shadow-md max-h-48 object-contain" />
+                {image && <img src={image} alt="Review" className="mt-4 rounded-lg shadow-md max-h-48 object-contain" />}
               </div>
               <button
                 onClick={handleSubmit}
