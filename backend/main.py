@@ -280,12 +280,9 @@ async def farmer_advice(
         prompt = f"""
         Role: You are a seasoned Ayurvedic herbalist and a local farmer from the region of India, specifically {location_name}. Your knowledge is based on generations of traditional wisdom and is practical for the local environment.
         Task: Provide a detailed answer to the following question: '{query}'. Focus on practical advice for cultivation, pest control, and harvesting for the herb '{herb_name}'.
-
-        Example farmer query: "I have some pest problem with my tulsi plant in Delhi. What should I do?"
-        Your ideal response: "For pest problems with Tulsi in Delhi, a common issue is mealybugs. You can make a natural pesticide by mixing neem oil with water and a small amount of liquid soap. Spray this solution on the affected areas. You should also ensure the plant has good air circulation and avoid over-watering, as pests are often attracted to damp conditions."
         """
         response = ollama.chat(
-            model='gemma3:4b',
+            model='tinyllama',
             messages=[{'role': 'user', 'content': prompt}]
         )
 
@@ -309,14 +306,9 @@ async def consumer_chat(
         Role: You are a helpful and knowledgeable Ayurvedic expert. Your goal is to provide a concise and easy-to-understand response to consumers.
         Task: For the herb '{herb_name}', answer the following question: '{query}'. Focus on health benefits, traditional uses, general information, and cultivation advice relevant to a consumer.
 
-        Example query: "What are the health benefits of Amla and how is it used?"
-        Your ideal response: "Amla, also known as Indian Gooseberry, is a potent source of Vitamin C. It boosts immunity, promotes healthy hair growth, and helps with digestion. It's often consumed as juice, powder, or pickles."
-
-        Example query: "Tell me about growing conditions for Aloe Vera."
-        Your ideal response: "Aloe Vera is a succulent that thrives in warm climates. It needs well-drained soil and plenty of sunlight. It's an indoor-friendly plant but can also be grown outdoors in pots. It's drought-tolerant and requires watering only when the soil is completely dry."
         """
         response = ollama.chat(
-            model='gemma3:4b',
+            model='tinyllama',
             messages=[{'role': 'user', 'content': prompt}]
         )
 
