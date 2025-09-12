@@ -6,6 +6,8 @@ function HerbForm({ colors = {} }) {
   const primaryGreen = colors.primaryGreen || "#4a7c59";
   const goldTan = colors.goldTan || "#a87f4f";
   const lightGrey = colors.lightGrey || "#f0f4f7";
+  // ... inside your HerbForm component
+  const [isEditingHerbName, setIsEditingHerbName] = useState(false);
 
   const [image, setImage] = useState(null);
   const [location, setLocation] = useState(null);
@@ -159,21 +161,12 @@ function HerbForm({ colors = {} }) {
   };
 
   const handleManualCorrection = async () => {
-    setLoading(true);
-    setError("");
-
-    // Simulate sending the corrected name to a backend endpoint
-    // For now, it will just show a success message
-    try {
-      setTimeout(() => {
-        setSubmissionStatus("success");
-        setLoading(false);
-      }, 1000);
-    } catch (e) {
-      setError("Failed to save manual correction.");
-      setLoading(false);
-    }
+    // This function is a placeholder for a potential manual correction endpoint.
+    // The current backend does not have an endpoint for this.
+    // In a real application, you would send the `editedHerbName` to the backend.
+    setSubmissionStatus("success");
   };
+
 
   const resetForm = () => {
     setImage(null);
@@ -310,36 +303,107 @@ function HerbForm({ colors = {} }) {
           )}
 
           {submissionStatus === "success" && (
-            <motion.div key="success" initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="text-center">
-              <h2 className="text-3xl font-semibold mb-4" style={{ color: primaryGreen }}>
-                <FaCheckCircle className="inline-block mr-2" /> Submission Successful!
-              </h2>
-              <p className="text-gray-600">Your entry has been recorded on the blockchain.</p>
-              <div className="mt-6 p-6 rounded-xl shadow-lg border-l-4 text-left" style={{ borderColor: primaryGreen, backgroundColor: lightGrey }}>
-                <p><strong>Herb Name:</strong> {editedHerbName}</p>
-                <p><strong>Herb ID:</strong> {herbId}</p> {/* Display the herb ID */}
-                <p><strong>Location:</strong> {location.lat?.toFixed(4)}, {location.lng?.toFixed(4)}</p>
-                <p><strong>Timestamp:</strong> {new Date().toLocaleString()}</p>
-                {image && <img src={image} alt="Submitted" className="mt-4 rounded-lg shadow-md max-h-48 object-contain" />}
+  <motion.div
+    key="success"
+    initial={{ opacity: 0, y: -50 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 50 }}
+  >
+
+    {/* Final, Polished Layout */}
+    <div
+      className="p-6 rounded-2xl shadow-lg border-l-4"
+      style={{
+        borderColor: primaryGreen,
+        backgroundColor: lightGrey,
+      }}
+    >
+      <div className="grid grid-cols-2 gap-6">
+        {/* Left Column */}
+        <div className="flex flex-col space-y-4">
+          {/* Top Text Details */}
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-bold text-gray-500">
+                Herb Name
+              </label>
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  value={editedHerbName}
+                  onChange={(e) => setEditedHerbName(e.target.value)}
+                  readOnly={!isEditingHerbName}
+                  className={`w-full text-2xl font-semibold bg-transparent p-1 rounded-md ${
+                    isEditingHerbName && "bg-white shadow-inner"
+                  }`}
+                  style={{ color: primaryGreen }}
+                />
+                <button
+                  onClick={() => setIsEditingHerbName(!isEditingHerbName)}
+                  className="p-1 rounded-md hover:bg-gray-200"
+                >
+                  <FaEdit size={16} style={{ color: primaryGreen }} />
+                </button>
               </div>
-              {qrCodeUrl && (
-                <div className="mt-6 p-6 rounded-xl shadow-lg text-center" style={{ backgroundColor: 'white' }}>
-                    <h3 className="text-2xl font-bold mb-4 flex items-center justify-center" style={{ color: primaryGreen }}>
-                        <FaQrcode className="mr-2" /> Print this QR Code
-                    </h3>
-                    <img src={qrCodeUrl} alt="QR Code for Herb" className="mx-auto w-48 h-48 mb-4" />
-                    <p className="text-gray-600 text-sm">Attach this code to your herb batch for traceability.</p>
-                </div>
-              )}
-              <button
-                onClick={resetForm}
-                className="mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all duration-200"
-                style={{ backgroundColor: primaryGreen }}
-              >
-                Start New Entry
-              </button>
-            </motion.div>
+            </div>
+            <div>
+              <label className="text-sm font-bold text-gray-500">
+                Location
+              </label>
+              <p className="font-mono text-2xl p-1">
+                {location.lat?.toFixed(4)}, {location.lng?.toFixed(4)}
+              </p>
+            </div>
+          </div>
+
+          {/* Bottom Image */}
+          {image && (
+            <img
+              src={image}
+              alt="Submitted Herb"
+              className="rounded-lg shadow-md w-full h-auto object-contain mt-1" // Ensures no cropping
+            />
           )}
+        </div>
+
+        {/* Right Column */}
+        <div className="flex flex-col items-center justify-center space-y-6">
+          {/* Bigger QR Code */}
+          {qrCodeUrl && (
+            <div className="p-2 bg-white rounded-lg text-center shadow-lg">
+              <img
+                src={qrCodeUrl}
+                alt="QR Code for Herb"
+                className="mx-auto w-50 h-50" // Larger QR code
+              />
+            </div>
+          )}
+
+          {/* Single-line Herb ID */}
+          <div className="flex items-center justify-center space-x-3 bg-gray-200 px-4 py-2 rounded-lg">
+            <label className="text-xl font-bold text-gray-600">
+              Herb ID:
+            </label>
+            <p className="font-mono text-2xl font-semibold">
+              {herbId}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Action Button */}
+    <div className="mt-6">
+      <button
+        onClick={resetForm}
+        className="w-full py-4 px-6 rounded-lg font-semibold text-white text-lg"
+        style={{ backgroundColor: primaryGreen }}
+      >
+        Start New Entry
+      </button>
+    </div>
+  </motion.div>
+)}
         </AnimatePresence>
       </div>
     </motion.div>

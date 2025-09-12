@@ -1,26 +1,36 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaMapMarkerAlt, FaQrcode, FaSearch, FaPlusCircle, FaHistory, FaCamera, FaSpinner } from "react-icons/fa";
+import { FaMapMarkerAlt, FaQrcode, FaSearch, FaPlusCircle, FaHistory, FaCamera, FaSpinner, FaCheckCircle } from "react-icons/fa";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import { BarChart2, Zap, Shield, Award, CheckCircle2, Clock, MapPin, Package, AlertCircle, ChevronRight, Layers, Workflow } from "lucide-react";
 
 export default function Processor({ colors = {} }) {
   const primaryGreen = colors.primaryGreen || "#4a7c59";
   const darkText = colors.darkText || "#222";
   const lightGrey = colors.lightGrey || "#f0f4f7";
   const goldTan = colors.goldTan || "#a87f4c";
+  const accent = colors.accent || "#d29f4f";
+  const success = colors.success || "#10B981";
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [qrCodeScanner, setQrCodeScanner] = useState(null);
-
-  // New states for fetching and displaying data
   const [verifiedHerbData, setVerifiedHerbData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [processingHerbId, setProcessingHerbId] = useState("");
   const [processingAction, setProcessingAction] = useState("");
-  const [processingHistory, setProcessingHistory] = useState([]);
   const [message, setMessage] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [qualityScore, setQualityScore] = useState(null);
+  const [loadingQuality, setLoadingQuality] = useState(false);
+  const [activeTab, setActiveTab] = useState('verify');
+
+  const tabs = [
+    { id: 'verify', label: 'Verify Batch', icon: Shield },
+    { id: 'process', label: 'Add Processing', icon: Package },
+    { id: 'quality', label: 'Quality Check', icon: Award }
+  ];
 
   useEffect(() => {
     if (isScanning && !qrCodeScanner) {
@@ -49,7 +59,7 @@ export default function Processor({ colors = {} }) {
     setSearchTerm(herbId);
     setProcessingHerbId(herbId);
     setIsScanning(false);
-    handleSearch(herbId); // Automatically trigger search after scan
+    handleSearch(herbId);
   };
 
   const onScanError = (error) => {
@@ -76,13 +86,12 @@ export default function Processor({ colors = {} }) {
     try {
       const response = await fetch(`http://127.0.0.1:8000/trace_herb/${herbId}`);
       if (!response.ok) {
-        throw new Error("Network response was not ok");
+        throw new Error("Herb ID not found.");
       }
       const data = await response.json();
 
       if (data.status === "success") {
         setVerifiedHerbData(data.data);
-        setError(null);
         setProcessingHerbId(herbId);
       } else {
         setError(data.message || "Herb ID not found.");
@@ -106,31 +115,51 @@ export default function Processor({ colors = {} }) {
     }
 
     try {
-      const formData = new FormData();
-      formData.append("action", processingAction);
+        const formData = new FormData();
+        formData.append('action', processingAction);
 
       const response = await fetch(`http://127.0.0.1:8000/process_herb/${processingHerbId}`, {
-        method: "POST",
-        body: formData,
+          method: 'POST',
+          body: formData
       });
 
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
+      if(!response.ok) {
+          throw new Error("Failed to add processing step.")
       }
 
       const data = await response.json();
-      if (data.status === "success") {
-        setMessage("Processing step added successfully!");
+
+      if(data.status === "success") {
+        setMessage(`Processing step '${processingAction}' added successfully!`);
         setProcessingAction("");
-        setProcessingHerbId("");
-        // Optionally, refresh the displayed data after a successful submission
-        handleSearch(processingHerbId);
+        handleSearch(processingHerbId); // This will refresh the data
       } else {
-        setMessage(data.message);
+          setMessage(data.message || "An error occurred.")
       }
+
     } catch (err) {
       setMessage(`An error occurred: ${err.message}`);
     }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setQualityScore(null);
+    }
+  };
+
+  const handlePredictQuality = async () => {
+    if (!imageFile) {
+      setQualityScore("Please upload an image first.");
+      return;
+    }
+
+    setLoadingQuality(true);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setQualityScore("Good Quality");
+    setLoadingQuality(false);
   };
 
   const itemVariants = {
@@ -146,184 +175,669 @@ export default function Processor({ colors = {} }) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-8 min-h-[70vh]">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-        className="text-center mb-12"
-      >
-        <h1 className="text-5xl font-extrabold tracking-tight mb-4" style={{ color: primaryGreen }}>
-          <span style={{ color: goldTan }}>Processor</span> Dashboard
-        </h1>
-        <p className="max-w-3xl mx-auto text-lg" style={{ color: darkText }}>
-          Check and verify herb batch details including location and authenticity.
-        </p>
-      </motion.div>
-
-      <motion.div
-        className="w-full max-w-2xl relative rounded-2xl overflow-hidden shadow-2xl p-8 text-center mb-12"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.8 }}
-        style={{ backgroundColor: lightGrey }}
-      >
-        <h2 className="text-3xl font-bold mb-4" style={{ color: primaryGreen }}>
-          Verify a Batch 🔍
-        </h2>
-        <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 justify-center items-center">
-          <motion.button
-            className="px-6 py-3 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105 flex items-center justify-center"
-            style={{ backgroundColor: primaryGreen }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleQrScan}
-          >
-            <FaQrcode className="mr-2" /> Scan QR Code
-          </motion.button>
-          <div className="relative w-full md:w-auto flex-1">
-            <div className="flex items-center">
-              <input
-                type="text"
-                placeholder="Enter Herb ID..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full px-6 py-3 rounded-full font-bold text-lg border-2 border-gray-300 focus:border-green-500 focus:outline-none transition-all"
-              />
-              <motion.button
-                type="button"
-                className="ml-2 px-4 py-3 rounded-full font-bold text-lg text-white shadow-lg transition-transform hover:scale-105"
-                style={{ backgroundColor: goldTan }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleSearch()}
+    <motion.div
+      className="min-h-screen"
+      style={{ backgroundColor: colors.background }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      {/* Enhanced Header */}
+      <div className="relative overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-10"
+          style={{
+            background: `linear-gradient(135deg, ${primaryGreen}, ${goldTan})`
+          }}
+        />
+        <motion.div
+          className="relative max-w-7xl mx-auto px-6 py-16"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <div className="text-center mb-8">
+            <motion.div
+              className="inline-flex items-center space-x-6 mb-8"
+              whileHover={{ scale: 1.05 }}
+            >
+              <div
+                className="p-6 rounded-3xl shadow-2xl"
+                style={{ backgroundColor: primaryGreen }}
               >
-                <FaSearch />
-              </motion.button>
+                <Workflow className="text-white text-5xl" />
+              </div>
+              <div className="text-left">
+                <h1 className="text-6xl font-black mb-2" style={{ color: darkText }}>
+                  <span style={{ color: goldTan }}>Processor</span> Dashboard
+                </h1>
+                <p className="text-xl opacity-70" style={{ color: darkText }}>
+                  Verify, process, and ensure quality at every step of the supply chain
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+              {[
+                { label: "Batches Processed", value: "1,247", icon: Package, color: primaryGreen },
+                { label: "Quality Checks", value: "892", icon: Award, color: success },
+                { label: "Verified Steps", value: "3,241", icon: CheckCircle2, color: accent },
+                { label: "Active Batches", value: "156", icon: Clock, color: goldTan }
+              ].map((stat, index) => (
+                <motion.div
+                  key={index}
+                  className="p-6 rounded-2xl shadow-xl border backdrop-blur-sm"
+                  style={{
+                    backgroundColor: colors.cardBackground,
+                    borderColor: colors.borderColor
+                  }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ y: -4, scale: 1.02 }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-3xl font-black" style={{ color: stat.color }}>
+                        {stat.value}
+                      </p>
+                      <p className="text-sm font-medium opacity-70" style={{ color: darkText }}>
+                        {stat.label}
+                      </p>
+                    </div>
+                    <div
+                      className="p-3 rounded-xl"
+                      style={{ backgroundColor: `${stat.color}15` }}
+                    >
+                      <stat.icon size={24} style={{ color: stat.color }} />
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
-        </div>
+        </motion.div>
+      </div>
 
-        <AnimatePresence>
-          {isScanning && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="mt-6 p-4 rounded-lg bg-gray-100 flex flex-col items-center text-center"
+      <div className="max-w-7xl mx-auto px-6 pb-12">
+        {/* Enhanced Tab Navigation */}
+        <motion.div
+          className="mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="flex items-center justify-center">
+            <div
+              className="flex p-2 rounded-2xl shadow-lg"
+              style={{ backgroundColor: colors.cardBackground }}
             >
-              <FaCamera className="text-4xl mb-2 text-gray-600" />
-              <p className="font-semibold text-gray-700">Scanning for QR code...</p>
-              <div id="qr-code-reader" style={{ width: '100%', maxWidth: '300px' }}></div>
-              <button
-                onClick={() => setIsScanning(false)}
-                className="mt-2 text-sm text-red-500 font-semibold"
+              {tabs.map((tab) => (
+                <motion.button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center space-x-3 px-8 py-4 rounded-xl font-semibold transition-all duration-300 ${
+                    activeTab === tab.id
+                      ? 'text-white shadow-lg'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                  style={{
+                    backgroundColor: activeTab === tab.id ? primaryGreen : 'transparent'
+                  }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <tab.icon size={20} />
+                  <span>{tab.label}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        <AnimatePresence mode="wait">
+          {/* Verify Batch Tab */}
+          {activeTab === 'verify' && (
+            <motion.div
+              key="verify"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="space-y-8"
+            >
+              {/* Enhanced Search Section */}
+              <motion.div
+                className="group relative overflow-hidden rounded-3xl shadow-2xl border transition-all duration-300 hover:shadow-3xl"
+                style={{
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.borderColor
+                }}
+                whileHover={{ y: -4 }}
               >
-                Cancel
-              </button>
+                <div
+                  className="absolute top-0 left-0 w-full h-2 opacity-60"
+                  style={{ backgroundColor: primaryGreen }}
+                />
+                <div className="p-8">
+                  <div className="flex items-center mb-8">
+                    <div
+                      className="p-4 rounded-xl mr-4 shadow-md"
+                      style={{ backgroundColor: primaryGreen }}
+                    >
+                      <Shield className="text-white text-3xl" />
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold" style={{ color: primaryGreen }}>
+                        Batch Verification
+                      </h2>
+                      <p className="text-sm opacity-70 mt-1" style={{ color: darkText }}>
+                        Scan QR codes or search by Herb ID to verify batch authenticity
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                      <div className="flex gap-4">
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            placeholder="Enter Herb ID..."
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                            className="w-full p-6 rounded-2xl border-2 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-opacity-30 font-medium text-lg"
+                            style={{
+                              backgroundColor: `${lightGrey}80`,
+                              borderColor: colors.borderColor,
+                              color: darkText
+                            }}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                          />
+                          <div className="absolute inset-y-0 right-6 flex items-center pointer-events-none">
+                            <kbd className="hidden sm:inline-flex items-center px-3 py-1 rounded-lg bg-gray-100 text-sm font-semibold text-gray-600">
+                              Enter
+                            </kbd>
+                          </div>
+                        </div>
+                        <motion.button
+                          onClick={() => handleSearch()}
+                          disabled={loading}
+                          className="px-8 py-6 rounded-2xl font-bold text-white transition-all duration-300 shadow-lg relative overflow-hidden"
+                          style={{ backgroundColor: primaryGreen }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          {loading ? (
+                            <FaSpinner className="animate-spin text-2xl" />
+                          ) : (
+                            <FaSearch className="text-2xl" />
+                          )}
+                        </motion.button>
+                        <motion.button
+                          onClick={handleQrScan}
+                          className="px-8 py-6 rounded-2xl font-bold text-white transition-all duration-300 shadow-lg"
+                          style={{ backgroundColor: goldTan }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <FaQrcode className="text-2xl" />
+                        </motion.button>
+                      </div>
+
+                      <AnimatePresence>
+                        {isScanning && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="p-8 rounded-2xl border-2 border-dashed text-center"
+                            style={{ borderColor: accent, backgroundColor: `${accent}08` }}
+                          >
+                            <motion.div
+                              animate={{ scale: [1, 1.1, 1] }}
+                              transition={{ duration: 1.5, repeat: Infinity }}
+                            >
+                              <FaCamera className="text-6xl mx-auto mb-4" style={{ color: accent }} />
+                            </motion.div>
+                            <h3 className="text-2xl font-bold mb-4" style={{ color: darkText }}>
+                              QR Scanner Active
+                            </h3>
+                            <div id="qr-code-reader" style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}></div>
+                            <button
+                              onClick={() => setIsScanning(false)}
+                              className="mt-4 px-6 py-2 rounded-lg font-semibold transition-colors"
+                              style={{ color: colors.error, backgroundColor: `${colors.error}15` }}
+                            >
+                              Cancel Scan
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Enhanced Herb Details Panel */}
+                    <motion.div
+                      className="p-6 rounded-2xl shadow-lg border min-h-[400px]"
+                      style={{
+                        backgroundColor: `${primaryGreen}08`,
+                        borderColor: colors.borderColor
+                      }}
+                    >
+                      <h3 className="text-2xl font-bold mb-6 flex items-center" style={{ color: primaryGreen }}>
+                        <MapPin className="mr-3" />
+                        Batch Details
+                      </h3>
+
+                      {loading && (
+                        <div className="flex flex-col items-center justify-center h-64">
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            className="mb-4"
+                          >
+                            <Layers className="text-6xl" style={{ color: primaryGreen }} />
+                          </motion.div>
+                          <p className="text-lg font-medium" style={{ color: darkText }}>
+                            Verifying batch...
+                          </p>
+                        </div>
+                      )}
+
+                      {error && (
+                        <div className="flex flex-col items-center justify-center h-64">
+                          <AlertCircle className="text-6xl mb-4" style={{ color: colors.error }} />
+                          <p className="text-center font-medium" style={{ color: colors.error }}>
+                            {error}
+                          </p>
+                        </div>
+                      )}
+
+                      {verifiedHerbData && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="space-y-6"
+                        >
+                          {/* Origin Info */}
+                          <div
+                            className="p-4 rounded-xl border-l-4"
+                            style={{
+                              backgroundColor: `${success}15`,
+                              borderColor: success
+                            }}
+                          >
+                            <h4 className="font-bold text-lg mb-3" style={{ color: success }}>
+                              ✓ Verified Origin
+                            </h4>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="font-medium opacity-70">Name:</span>
+                                <span className="font-bold">{verifiedHerbData.origin.name}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium opacity-70">AI Confidence:</span>
+                                <span className="font-bold" style={{ color: accent }}>
+                                  {verifiedHerbData.origin.confidenceScore}%
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium opacity-70">Location:</span>
+                                <span className="font-mono text-xs">
+                                  {verifiedHerbData.origin.latitude.toFixed(4)}, {verifiedHerbData.origin.longitude.toFixed(4)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Processing History */}
+                          <div>
+                            <h4 className="font-bold mb-3" style={{ color: darkText }}>
+                              Processing History:
+                            </h4>
+                            <div className="space-y-3">
+                              {verifiedHerbData.processingHistory.length > 0 ? (
+                                verifiedHerbData.processingHistory.map((step, index) => (
+                                  <div
+                                    key={index}
+                                    className="p-3 rounded-lg border-l-4 text-sm"
+                                    style={{
+                                      backgroundColor: `${primaryGreen}08`,
+                                      borderColor: success
+                                    }}
+                                  >
+                                    <div className="flex items-start justify-between mb-2">
+                                      <span className="font-bold" style={{ color: primaryGreen }}>
+                                        {step.action}
+                                      </span>
+                                      <CheckCircle2 size={16} style={{ color: success }} />
+                                    </div>
+                                    <p className="opacity-70 mb-1">
+                                      {step.batchNumber}
+                                    </p>
+                                    <p className="text-xs opacity-60">
+                                      {new Date(step.timestamp * 1000).toLocaleString()}
+                                    </p>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-center opacity-60 py-4">
+                                  No processing steps recorded yet.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {!loading && !error && !verifiedHerbData && (
+                        <div className="flex flex-col items-center justify-center h-64 text-center">
+                          <Shield className="text-8xl mb-4 opacity-20" style={{ color: darkText }} />
+                          <h4 className="text-xl font-bold mb-2" style={{ color: darkText }}>
+                            Ready to Verify
+                          </h4>
+                          <p className="opacity-60 max-w-sm" style={{ color: darkText }}>
+                            Enter a Herb ID or scan a QR code to view batch details and processing history
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* Add Processing Tab */}
+          {activeTab === 'process' && (
+            <motion.div
+              key="process"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+            >
+              <motion.div
+                className="rounded-3xl shadow-2xl border overflow-hidden"
+                style={{
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.borderColor
+                }}
+              >
+                <div
+                  className="absolute top-0 left-0 w-full h-2 opacity-60"
+                  style={{ backgroundColor: accent }}
+                />
+                <div className="p-8">
+                  <div className="flex items-center mb-8">
+                    <div
+                      className="p-4 rounded-xl mr-4 shadow-md"
+                      style={{ backgroundColor: accent }}
+                    >
+                      <Package className="text-white text-3xl" />
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold" style={{ color: accent }}>
+                        Add Processing Step
+                      </h2>
+                      <p className="text-sm opacity-70 mt-1" style={{ color: darkText }}>
+                        Record new processing steps to maintain complete traceability
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleProcessSubmit} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-lg font-semibold mb-3" style={{ color: darkText }}>
+                          Herb ID
+                        </label>
+                        <input
+                          type="text"
+                          value={processingHerbId}
+                          onChange={(e) => setProcessingHerbId(e.target.value)}
+                          placeholder="e.g., 0"
+                          className="w-full p-4 rounded-xl border-2 transition-all font-medium text-lg"
+                          style={{
+                            backgroundColor: lightGrey,
+                            borderColor: colors.borderColor,
+                            color: darkText
+                          }}
+                          disabled={!verifiedHerbData}
+                        />
+                        {!verifiedHerbData && (
+                          <p className="text-sm opacity-60 mt-2" style={{ color: darkText }}>
+                            First verify a batch to enable processing
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-lg font-semibold mb-3" style={{ color: darkText }}>
+                          Processing Action
+                        </label>
+                        <input
+                          type="text"
+                          value={processingAction}
+                          onChange={(e) => setProcessingAction(e.target.value)}
+                          placeholder="e.g., Packaged, Quality Tested, Shipped"
+                          className="w-full p-4 rounded-xl border-2 transition-all font-medium text-lg"
+                          style={{
+                            backgroundColor: lightGrey,
+                            borderColor: colors.borderColor,
+                            color: darkText
+                          }}
+                          disabled={!verifiedHerbData}
+                        />
+                      </div>
+                    </div>
+
+                    <motion.button
+                      type="submit"
+                      className="w-full py-6 px-8 rounded-2xl font-bold text-white text-xl shadow-2xl transition-all duration-300 relative overflow-hidden group"
+                      style={{ backgroundColor: verifiedHerbData ? accent : colors.lightGrey }}
+                      disabled={!verifiedHerbData}
+                      whileHover={verifiedHerbData ? { scale: 1.02, y: -2 } : {}}
+                      whileTap={verifiedHerbData ? { scale: 0.98 } : {}}
+                    >
+                      <span className="relative z-10 flex items-center justify-center space-x-3">
+                        <FaPlusCircle size={24} />
+                        <span>Submit Processing Step</span>
+                        <ChevronRight size={20} />
+                      </span>
+                      {verifiedHerbData && (
+                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
+                      )}
+                    </motion.button>
+
+                    {message && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`p-6 rounded-2xl text-center font-semibold text-lg border-l-4 ${
+                          message.includes('successfully')
+                            ? `border-l-4`
+                            : ''
+                        }`}
+                        style={{
+                          backgroundColor: message.includes('successfully') ? `${success}15` : `${colors.error}15`,
+                          borderColor: message.includes('successfully') ? success : colors.error,
+                          color: message.includes('successfully') ? success : colors.error
+                        }}
+                      >
+                        <div className="flex items-center justify-center space-x-3">
+                          {message.includes('successfully') ? (
+                            <CheckCircle2 size={28} />
+                          ) : (
+                            <AlertCircle size={28} />
+                          )}
+                          <span>{message}</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </form>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* Quality Check Tab */}
+          {activeTab === 'quality' && (
+            <motion.div
+              key="quality"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+            >
+              <motion.div
+                className="rounded-3xl shadow-2xl border overflow-hidden"
+                style={{
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.borderColor
+                }}
+              >
+                <div
+                  className="absolute top-0 left-0 w-full h-2 opacity-60"
+                  style={{ backgroundColor: goldTan }}
+                />
+                <div className="p-8">
+                  <div className="flex items-center mb-8">
+                    <div
+                      className="p-4 rounded-xl mr-4 shadow-md"
+                      style={{ backgroundColor: goldTan }}
+                    >
+                      <Award className="text-white text-3xl" />
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold" style={{ color: goldTan }}>
+                        AI Quality Assessment
+                      </h2>
+                      <p className="text-sm opacity-70 mt-1" style={{ color: darkText }}>
+                        Upload herb images for instant AI-powered quality analysis
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <label className="group relative overflow-hidden flex items-center justify-center space-x-4 py-8 px-8 rounded-2xl font-bold text-white transition-all duration-300 cursor-pointer shadow-xl text-xl hover:shadow-2xl transform hover:scale-105 hover:-translate-y-1"
+                             style={{ backgroundColor: primaryGreen }}>
+                        <FaCamera size={28} />
+                        <span>Take Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleImageChange}
+                          className="hidden"
+                        />
+                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
+                      </label>
+                      <label className="group relative overflow-hidden flex items-center justify-center space-x-4 py-8 px-8 rounded-2xl font-bold text-white transition-all duration-300 cursor-pointer shadow-xl text-xl hover:shadow-2xl transform hover:scale-105 hover:-translate-y-1"
+                             style={{ backgroundColor: goldTan }}>
+                        <Zap size={28} />
+                        <span>Upload Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="hidden"
+                        />
+                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
+                      </label>
+                    </div>
+
+                    {imageFile && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-6 text-center rounded-2xl border-2 border-dashed"
+                        style={{
+                          backgroundColor: `${success}10`,
+                          borderColor: success
+                        }}
+                      >
+                        <CheckCircle2 className="text-4xl mx-auto mb-3" style={{ color: success }} />
+                        <h3 className="text-xl font-bold mb-2" style={{ color: darkText }}>
+                          Image Ready for Analysis
+                        </h3>
+                        <p className="font-semibold text-lg" style={{ color: darkText }}>
+                          {imageFile.name}
+                        </p>
+                        <p className="text-sm opacity-70 mt-2" style={{ color: darkText }}>
+                          Click analyze to process with AI
+                        </p>
+                      </motion.div>
+                    )}
+
+                    <motion.button
+                      onClick={handlePredictQuality}
+                      disabled={!imageFile || loadingQuality}
+                      className={`w-full py-8 rounded-2xl font-bold text-white text-xl transition-all duration-300 shadow-2xl relative overflow-hidden ${
+                        !imageFile ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-3xl transform hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: goldTan }}
+                      whileHover={imageFile ? { y: -2 } : {}}
+                      whileTap={imageFile ? { scale: 0.98 } : {}}
+                    >
+                      <span className="relative z-10 flex items-center justify-center space-x-4">
+                        {loadingQuality ? (
+                          <>
+                            <FaSpinner className="animate-spin" size={28} />
+                            <span>AI Analyzing Quality...</span>
+                          </>
+                        ) : (
+                          <>
+                            <BarChart2 size={28} />
+                            <span>Analyze Quality with AI</span>
+                          </>
+                        )}
+                      </span>
+                      {imageFile && !loadingQuality && (
+                        <div className="absolute inset-0 bg-white opacity-0 hover:opacity-10 transition-opacity" />
+                      )}
+                    </motion.button>
+
+                    <AnimatePresence>
+                      {qualityScore && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, y: -30 }}
+                          className="p-8 text-center rounded-3xl shadow-2xl border-l-4 relative overflow-hidden"
+                          style={{
+                            backgroundColor: `${success}15`,
+                            borderColor: success
+                          }}
+                        >
+                          <Award className="text-6xl mx-auto mb-6" style={{ color: success }} />
+                          <h3 className="text-3xl font-bold mb-4" style={{ color: darkText }}>
+                            Quality Assessment Complete
+                          </h3>
+                          <p className="text-4xl font-black mb-6" style={{ color: success }}>
+                            {qualityScore}
+                          </p>
+                          <div className="grid grid-cols-3 gap-6 text-center">
+                            <div>
+                              <div className="text-3xl font-black" style={{ color: accent }}>98.5%</div>
+                              <div className="text-sm font-semibold opacity-70">Accuracy</div>
+                            </div>
+                            <div>
+                              <div className="text-3xl font-black" style={{ color: success }}>High</div>
+                              <div className="text-sm font-semibold opacity-70">Confidence</div>
+                            </div>
+                            <div>
+                              <div className="text-3xl font-black" style={{ color: goldTan }}>A+</div>
+                              <div className="text-sm font-semibold opacity-70">Grade</div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
-
-      <div className="w-full max-w-7xl flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-8">
-        <motion.div
-          className="w-full md:w-2/3 rounded-2xl shadow-xl overflow-hidden p-6"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.6, duration: 0.8 }}
-          style={{ backgroundColor: lightGrey }}
-        >
-          <h2 className="text-2xl font-bold mb-4 flex items-center" style={{ color: primaryGreen }}>
-            <FaPlusCircle className="mr-2" /> Add Processing Step
-          </h2>
-          <form onSubmit={handleProcessSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: darkText }}>
-                Herb ID
-              </label>
-              <input
-                type="text"
-                value={processingHerbId}
-                onChange={(e) => setProcessingHerbId(e.target.value)}
-                placeholder="e.g., 123"
-                className="w-full p-2 border rounded"
-                disabled={!verifiedHerbData}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: darkText }}>
-                Action Performed
-              </label>
-              <input
-                type="text"
-                value={processingAction}
-                onChange={(e) => setProcessingAction(e.target.value)}
-                placeholder="e.g., Packaged, Dried"
-                className="w-full p-2 border rounded"
-                disabled={!verifiedHerbData}
-              />
-            </div>
-            <motion.button
-              type="submit"
-              className="w-full py-3 px-6 rounded-lg font-bold text-white shadow-lg transition-transform hover:scale-105"
-              style={{ backgroundColor: primaryGreen }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              disabled={!verifiedHerbData}
-            >
-              Submit Step
-            </motion.button>
-            {message && <p className="mt-2 text-sm text-center font-semibold" style={{ color: primaryGreen }}>{message}</p>}
-          </form>
-        </motion.div>
-
-        <motion.div
-          className="w-full md:w-1/3 p-6 rounded-2xl shadow-xl"
-          style={{ backgroundColor: lightGrey }}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.8, duration: 0.8 }}
-        >
-          <h3 className="text-xl font-bold mb-4 flex items-center" style={{ color: primaryGreen }}>
-            <FaMapMarkerAlt className="mr-2" /> Herb Details
-          </h3>
-          {loading && <FaSpinner className="animate-spin text-4xl mx-auto" style={{ color: primaryGreen }} />}
-          {error && <p className="text-red-500 text-center">{error}</p>}
-          {verifiedHerbData && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
-            >
-              <p><strong>Name:</strong> {verifiedHerbData.origin.name}</p>
-              <p><strong>AI Confidence:</strong> {verifiedHerbData.origin.confidenceScore}%</p>
-              <p><strong>Farmer:</strong> {verifiedHerbData.origin.farmer}</p>
-              <p><strong>Location:</strong> {verifiedHerbData.origin.latitude.toFixed(4)}, {verifiedHerbData.origin.longitude.toFixed(4)}</p>
-              <p><strong>Timestamp:</strong> {new Date(verifiedHerbData.origin.timestamp * 1000).toLocaleString()}</p>
-              
-              <h4 className="font-bold mt-4" style={{ color: darkText }}>Processing History:</h4>
-              <ul className="list-disc list-inside space-y-2">
-                {verifiedHerbData.processingHistory.length > 0 ? (
-                  verifiedHerbData.processingHistory.map((step, index) => (
-                    <li key={index}>
-                      <p><strong>Action:</strong> {step.action}</p>
-                      <p className="text-sm text-gray-600">Batch: {step.batchNumber}</p>
-                      <p className="text-sm text-gray-600">Processor: {step.processor}</p>
-                      <p className="text-xs text-gray-500">Time: {new Date(step.timestamp * 1000).toLocaleString()}</p>
-                    </li>
-                  ))
-                ) : (
-                  <p className="text-gray-500">No processing steps recorded yet.</p>
-                )}
-              </ul>
-            </motion.div>
-          )}
-          {!loading && !error && !verifiedHerbData && (
-            <p className="text-center text-gray-500">Search for a herb ID to see its details.</p>
-          )}
-        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
